@@ -14,7 +14,7 @@ With APT you won't have to manually add tags ever again. You just have to create
 
 = Features = 
 * Automatically adds tags to posts according to their title, content and excerpt
-* Tags are added to a post also when different user-specified keywords are found (example: tag "cat" is added if you assign to it words "cats, kitty, meow" and they are found in an post by the plugin)
+* Tags are added to a post also when different user-specified keywords are found (example: tag "cat" is added if you assign to it words "cats, kitty, meow" and they are found in a post by the plugin)
 * Smart wildcard representation of any alphanumeric characters for related words (pattern "cat\*" will match "cats" and "category", pattern "c\*t" will match "cat" and "colt" etc.)
 * Adds tags to all posts with just one click (three ways of handling already assigned tags)
 * Configurable maximum amount of tags per post (Automatic Post Tagger won't add more tags than you want)
@@ -77,6 +77,10 @@ Nobody has donated yet. Be the first and have your link displayed here!
 Nobody has donated yet. Be the first and have your link displayed here!
 
 == Changelog ==
+
+= 1.1 =
+* Fixed: grammar errors
+
 = 1.0 =
 * Initial release
 

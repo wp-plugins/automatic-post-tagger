@@ -709,7 +709,7 @@ if(isset($_POST['apt_create_a_backup_button'])){ //creating backup
 
 #################### assigning tags with one click ##############
 if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
-	$apt_table_select_posts = mysql_query("SELECT ID FROM $apt_wp_posts WHERE post_type = 'post' AND (post_status != 'trash' OR post_status != 'draft' OR post_status != 'auto-draft')");
+	$apt_table_select_posts = mysql_query("SELECT ID FROM $apt_wp_posts WHERE post_type = 'post' AND (post_status != 'trash' AND post_status != 'draft' AND post_status != 'auto-draft')");
 	$apt_table_wp_post_count = mysql_num_rows($apt_table_select_posts);
 	$apt_tag_maximum = get_option('apt_miscellaneous_tag_maximum');
 
