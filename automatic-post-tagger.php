@@ -119,7 +119,7 @@ function apt_plugin_admin_notices(){
 		}
 
 		if(get_option('apt_admin_notice_donate') == 1){ //determine if the donation notice was not dismissed
-			if(((time() - get_option('apt_stats_install_date')) >= 604800) AND (get_option('apt_stats_assigned_tags') >= 10)){ //show donation notice after a week (604800 seconds) and if the plugin added more than 10 tags
+			if(((time() - get_option('apt_stats_install_date')) >= 604800) AND (get_option('apt_stats_assigned_tags') >= 50)){ //show donation notice after a week (604800 seconds) and if the plugin added more than 10 tags
 				echo '<div id="message" class="updated"><p>
 					<b>Thanks for using APT!</b> You installed this plugin over a week ago. Since that time it has assigned <b>'. get_option('apt_stats_assigned_tags') .' tags</b> to your posts.
 					If you are satisfied with the results, isn\'t it worth at least a few dollars? Donations motivate the developer to continue working on this plugin. <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=T2QUJ4R6JHKNG" title="Donate with Paypal"><b>Sure, no problem!</b></a>
@@ -764,7 +764,6 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 					<li><a class="apt_sidebar_link apt_wp" href="http://wordpress.org/extend/plugins/automatic-post-tagger/">Plugin homepage</a></li>
 					<li><a class="apt_sidebar_link apt_wp" href="http://wordpress.org/extend/plugins/automatic-post-tagger/faq">Frequently asked questions</a> </li>
 					<li><a class="apt_sidebar_link apt_wp" href="http://wordpress.org/support/plugin/automatic-post-tagger" title="Bug reports and feature requests">Support forum</a></li>
-					<li><a class="apt_sidebar_link apt_db" href="http://devtard.com">Developer's blog</a></li>
 					</ul>
 				</div>
 			</div>
@@ -797,7 +796,7 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 			
 			<!-- postbox -->
 			<div class="postbox">
-				<h3>Recent contributors<span style="float:right;"><small><a href="http://wordpress.org/extend/plugins/automatic-post-tagger/other_notes/#TOP-5-contributors">Full list</a></small></span></h3>
+				<h3>Recent contributors<span style="float:right;"><small><a href="http://wordpress.org/extend/plugins/automatic-post-tagger/donors">Full list</a></small></span></h3>
 				<div class="inside">
 					<p><iframe border="0" allowtransparency="yes" style="width:100%; height:135px;" src="http://devtard.com/projects/automatic-post-tagger/contributors.php" frameborder="0" scrolling="no">List of recent contributors</iframe></p>
 				</div>

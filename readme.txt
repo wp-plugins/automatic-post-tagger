@@ -66,25 +66,23 @@ You are most likely trying to import records with duplicate tag names which are 
 = Something does not work. What should I do? =
 Try reinstalling the plugin.
 
-= I have another problem that is not described on this page. =
+= I have another problem that is not described on this page and wasn't solved by reinstalling. =
 Post a new thread on the [support forum](http://wordpress.org/support/plugin/automatic-post-tagger "support forum").
 
-== Other Notes ==
-= TOP 5 contributors =
-Nobody has donated yet. Be the first and have your link displayed here!
+== Donors ==
+
 
 = Recent donations =
 Nobody has donated yet. Be the first and have your link displayed here!
 
 == Changelog ==
-
 = 1.1 =
-* Fixed: grammar errors
+
 
 = 1.0 =
 * Initial release
 
 == Upgrade Notice ==
-
+= 1.1 =
 = 1.0 =
 * Initial release
