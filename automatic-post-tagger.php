@@ -2,8 +2,8 @@
 /*
 Plugin Name: Automatic Post Tagger
 Plugin URI: http://wordpress.org/extend/plugins/automatic-post-tagger
-Description: This plugin automatically adds user-specified tags to posts.
-Version: 1.0
+Description: This plugin automatically adds user-defined tags to posts.
+Version: 1.1
 Author: Devtard
 Author URI: http://devtard.com
 License: GPLv2 or later
@@ -11,18 +11,18 @@ License: GPLv2 or later
 
 /*  Copyright 2012  Devtard  (email : devtard@gmail.com)
 
-    This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License, version 2, as 
-    published by the Free Software Foundation.
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License, version 2, as 
+	published by the Free Software Foundation.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+	You should have received a copy of the GNU General Public License
+	along with this program; if not, write to the Free Software
+	Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 ## Dragons ahead! Read the code at your own risk. Don't complain if you'll get dizzy. I warned you! ##
@@ -95,18 +95,18 @@ function apt_plugin_admin_notices(){
 		######################## GET notifications ###################### //must be before other checks
 		if(isset($_GET['n']) AND $_GET['n'] == 1){
 			update_option('apt_admin_notice_install', 0); //hide activation notice
-			echo '<div class="updated"><p><b>Note:</b> Managing tags (creating, importing, editing, deleting) on this page doesn\'t affect tags that are already added to your posts.</p></div>'; //display quick info for beginners
+			echo '<div id="message" class="updated"><p><b>Note:</b> Managing tags (creating, importing, editing, deleting) on this page doesn\'t affect tags that are already added to your posts.</p></div>'; //display quick info for beginners
 		}
 		if(isset($_GET['n']) AND $_GET['n'] == 2){
 			update_option('apt_admin_notice_update', 0); //hide update notice
-			echo '<div class="updated"><p><b>New features in version '. get_option('apt_plugin_version') .':</b> Lorem ipsum for v1.1</p></div>'; //show new functions
+			echo '<div id="message" class="updated"><p><b>New feature in version '. get_option('apt_plugin_version') .':</b> You can create tags directly from a widget located under the post editor now.</p></div>'; //show new functions
 		}
 		if(isset($_GET['n']) AND $_GET['n'] == 3){
 			update_option('apt_admin_notice_donate', 0); //hide donation notice
 		}
 		if(isset($_GET['n']) AND $_GET['n'] == 4){
 			update_option('apt_admin_notice_donate', 0); //hide donation notice and display another notice (below)
-			echo '<div class="updated"><p><b>Thank you for donating.</b> If you filled in the URL of your website, it should appear on the list of recent contributors in the next 48 hours.</p></div>'; //show "thank you" message
+			echo '<div id="message" class="updated"><p><b>Thank you for donating.</b> If you filled in the URL of your website, it should appear on the list of recent contributors in the next 48 hours.</p></div>'; //show "thank you" message
 		}
 
 
@@ -119,9 +119,9 @@ function apt_plugin_admin_notices(){
 		}
 
 		if(get_option('apt_admin_notice_donate') == 1){ //determine if the donation notice was not dismissed
-			if(((time() - get_option('apt_stats_install_date')) >= 604800) AND (get_option('apt_stats_assigned_tags') >= 50)){ //show donation notice after a week (604800 seconds) and if the plugin added more than 10 tags
+			if(((time() - get_option('apt_stats_install_date')) >= 2629743) AND (get_option('apt_stats_assigned_tags') >= 50)){ //show donation notice after a month (2629743 seconds) and if the plugin added more than 50 tags
 				echo '<div id="message" class="updated"><p>
-					<b>Thanks for using APT!</b> You installed this plugin over a week ago. Since that time it has assigned <b>'. get_option('apt_stats_assigned_tags') .' tags</b> to your posts.
+					<b>Thanks for using <acronym title="Automatic Post Tagger">APT</acronym>!</b> You installed this plugin over a month ago. Since that time it has assigned <b>'. get_option('apt_stats_assigned_tags') .' tags</b> to your posts.
 					If you are satisfied with the results, isn\'t it worth at least a few dollars? Donations motivate the developer to continue working on this plugin. <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=T2QUJ4R6JHKNG" title="Donate with Paypal"><b>Sure, no problem!</b></a>
 
 					<span style="float:right">
@@ -134,6 +134,150 @@ function apt_plugin_admin_notices(){
 	}//-if admin check
 }
 #################################################################
+######################## CREATE TAG FUNCTION ####################
+function apt_create_a_new_tag($apt_tag_name,$apt_tag_related_words){
+	global $wpdb, $apt_table;
+	$apt_table_tag_existence_check = mysql_query("SELECT id FROM $apt_table WHERE tag = '". $apt_tag_name ."' LIMIT 0,1");
+
+	if(empty($apt_tag_name)){ //checking if the value of the tag isn't empty
+		echo '<div id="message" class="error"><p><b>Error:</b> You can\'t create a tag that does not have a name.</p></div>';
+	}
+		else{
+			if(mysql_num_rows($apt_table_tag_existence_check)){ //checking if the tag exists
+				echo '<div id="message" class="error"><p><b>Error:</b> Tag <b>"'. $apt_tag_name .'"</b> already exists!</p></div>';
+			} 
+			else{ //if the tag is not in DB, create one
+
+				$apt_created_tag_trimmed = trim($apt_tag_name); //replacing ONLY whitespace characters from beginning and end (we could remove multiple characters like ';', but they are not used here to separate anything, so we let the user to do what he/she wants)
+				$apt_created_related_words_trimmed = preg_replace(array('/\s{2,}/', '/[\t\n]/'), ' ', $apt_tag_related_words); //replacing multiple whitespace characters with a space (we could replace them completely, but that might annoy users)
+				$apt_created_related_words_trimmed = preg_replace('{;+}', ';', $apt_created_related_words_trimmed); //replacing multiple semicolons with one
+				$apt_created_related_words_trimmed = preg_replace('/[\*]+/', '*', $apt_created_related_words_trimmed); //replacing multiple asterisks with one
+				$apt_created_related_words_trimmed = trim(trim(trim($apt_created_related_words_trimmed), ';')); //trimming semicolons and whitespace characters from the beginning and the end
+
+				mysql_query("INSERT IGNORE INTO $apt_table (tag, related_words) VALUES ('". $apt_created_tag_trimmed ."', '". $apt_created_related_words_trimmed ."')");
+				update_option('apt_stats_current_tags', mysql_num_rows(mysql_query("SELECT id FROM $apt_table"))); //update stats
+
+
+				echo '<div id="message" class="updated"><p>Tag <b>"'. $apt_created_tag_trimmed .'"</b> with '; //confirm message with a condition displaying related words if available
+					if(empty($apt_created_related_words_trimmed)){
+						echo 'no related words';
+					}else{
+						if(strstr($apt_created_related_words_trimmed, ';')){ //print single or plural form
+							echo 'related words <b>"'. $apt_created_related_words_trimmed .'"</b>';
+						}
+						else{
+							echo 'related word <b>"'. $apt_created_related_words_trimmed .'"</b>';
+						}
+
+					}
+				echo ' has been created.</p></div>';
+
+				//warning messages appearing when "unexpected" character are being saved
+				if(preg_match("/[^a-zA-Z0-9\s]/", iconv('UTF-8', 'ASCII//TRANSLIT', $apt_created_tag_trimmed))){ //user-moron scenario
+					echo '<div id="message" class="error"><p><b>Warning:</b> Tag name <b>"'. $apt_created_tag_trimmed .'"</b> contains non-alphanumeric characters.</p></div>'; //warning message
+				}
+				if(preg_match("/[^a-zA-Z0-9\s\;\*]/", iconv('UTF-8', 'ASCII//TRANSLIT', $apt_created_related_words_trimmed))){ //user-moron scenario
+					echo '<div id="message" class="error"><p><b>Warning:</b> Related words "'. $apt_created_related_words_trimmed .'" contain non-alphanumeric characters.</p></div>'; //warning message
+				}
+				if(strstr($apt_created_related_words_trimmed, ' ;') OR strstr($apt_created_related_words_trimmed, '; ')){ //user-moron scenario
+					echo '<div id="message" class="error"><p><b>Warning:</b> Related words "'. $apt_created_related_words_trimmed .'" contain extra space near the semicolon.</p></div>'; //warning message
+				}
+				if(strstr($apt_created_related_words_trimmed, '*') AND (get_option('apt_miscellaneous_wildcards') == 0)){ //user-moron scenario
+					echo '<div id="message" class="error"><p><b>Warning:</b> Your related words contain an asterisk, but using wildcards is currently disabled!</p></div>'; //warning message
+				}
+
+
+			}//--else
+		}//--else
+}
+
+#################################################################
+######################## META BOX ###############################
+
+function apt_custom_box_add(){ //add custom box
+	add_meta_box('apt_section_id','Automatic Post Tagger','apt_custom_box_content','post','side');
+}
+function apt_custom_box_content(){ //custom box content
+?>
+	<form action="">
+	<p>Tag name: <input style="min-width:50px;width:100%;" type="text" id="apt_box_tag_name" name="apt_box_tag_name" value="" maxlength="255" /><br />
+	Related words (separated by semicolons): <input style="min-width:50px;width:100%;" type="text" id="apt_box_tag_related_words" name="apt_box_tag_related_words" value="" maxlength="255" onKeyUp="apt_validate();" /></p>
+
+	<p>
+		<input class="button-highlighted" type="button" id="apt_create_a_new_tag_ajax_button" value=" Create a new tag ">
+		<span id="apt_box_message" style="color:green;"></span>
+	</p>
+	</form>
+<?php
+}
+
+
+
+
+function apt_custom_box_save_tag(){ //save tag sent via custom box
+	apt_create_a_new_tag($_POST['apt_box_tag_name'],$_POST['apt_box_tag_related_words']);
+}
+
+#################### javascripts ####################
+function apt_custom_box_ajax() { //javascript calling function above
+?>
+<script type='text/javascript' src='http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js'></script> 
+<script type="text/javascript">
+jQuery(document).ready(function($) {
+	$('#apt_create_a_new_tag_ajax_button').click(function () {
+
+
+	var apt_box_tag_name = $('#apt_box_tag_name').val();
+	var apt_box_tag_related_words = $('#apt_box_tag_related_words').val();
+
+	var data = {
+		action: 'apt_custom_box_save_tag',
+		apt_box_tag_name: apt_box_tag_name,
+		apt_box_tag_related_words: apt_box_tag_related_words,
+		};
+
+	$.ajax ({
+		type: 'POST',
+		url: ajaxurl,
+		data: data,
+		success: function() {
+				jQuery('#apt_box_tag_name, #apt_box_tag_related_words').val('');
+
+				jQuery("#apt_box_message").fadeIn("fast");
+				document.getElementById("apt_box_message").innerHTML="OK";
+				jQuery("#apt_box_message").delay(1000).fadeOut("slow");
+			}
+		});
+	});
+});
+</script>
+<?php
+}
+
+function apt_settings_page_javascript() { //javascript calling function above
+?>
+<script type="text/javascript">
+function apt_change_background(num){
+
+
+   if (document.getElementById("apt_taglist_checkbox_"+num).checked) {
+     document.getElementById("apt_taglist_tag_"+num).style.backgroundColor='#FFD2D2';
+     document.getElementById("apt_taglist_related_words_"+num).style.backgroundColor='#FFD2D2';
+   }
+   else {
+    document.getElementById("apt_taglist_tag_"+num).style.backgroundColor='';
+    document.getElementById("apt_taglist_related_words_"+num).style.backgroundColor='';
+   }
+
+
+}
+</script>
+<?php
+}
+
+
+
+#################################################################
 ####################### MYSQL MANAGEMENT ########################
 
 #################### table creation function ####################
@@ -145,7 +289,7 @@ function apt_create_table(){ //this functions defines the plugin table structure
 		$apt_chararset_collate = "DEFAULT CHARACTER SET {$wpdb->charset}";
 	}
 	if(!empty($wpdb->collate)){
-	        $apt_chararset_collate .= " COLLATE {$wpdb->collate}";
+			$apt_chararset_collate .= " COLLATE {$wpdb->collate}";
 	}
 
 	//primary key should be tag because when importing tags some may have the same id, so we need to compare the tag, not id - that is used only for deleting by checking checkboxes
@@ -186,20 +330,20 @@ function apt_install_plugin(){ //runs only after MANUAL activation!
 	add_option('apt_post_analysis_excerpt', '0', '', 'no');
 	add_option('apt_handling_current_tags', '1', '', 'no');
 	add_option('apt_miscellaneous_tag_maximum', '20', '', 'no');
-	add_option('apt_miscellaneous_tagging_occasion', '1', '', 'no');
+	add_option('apt_miscellaneous_tagging_occasion', '1', '', 'yes'); //this is used on every page reload, so until I find a way to stop checking for this I need to cache it
 	add_option('apt_miscellaneous_wildcards', '0', '', 'no');
 }
 #################### update function ############################
 function apt_update_plugin(){ //runs when all plugins are loaded (needs to be deleted after register_update_hook is available)
 	if(current_user_can('manage_options')){
-		if(apt_get_plugin_version() != get_option('apt_plugin_version')){
+		if(get_option('apt_plugin_version') <> apt_get_plugin_version()){ //check if the saved version is not equal to the current version
 
+			/*
 			#### now comes everything what must be changed in the new version
 			if(get_option('apt_plugin_version') == '1.0'){ //upgrade to v1.1 from 1.0:
-				//changes
 			}
-
 			#### -/changes
+			*/
 
 			update_option('apt_admin_notice_update', 1); //we want to show the admin notice after upgrading, right?
 			update_option('apt_plugin_version', apt_get_plugin_version(), '', 'no'); //update plugin version in DB
@@ -229,7 +373,7 @@ function apt_uninstall_plugin(){ //runs after uninstalling of the plugin
 	delete_option('apt_miscellaneous_wildcards');
 }
 
-#################################################################
+################################################################
 ########################## TAGGING ENGINE #######################
 #################################################################
 function apt_tagging_algorithm($post_id){ //this function is for adding tags to only one post - mass adding should be handled by using a loop
@@ -316,7 +460,7 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 			$apt_tags_to_add_max = $apt_tag_maximum;
 		}
 
-
+//die($apt_post_analysis_haystack_string); //debug
 
 		while($apt_table_cell = mysql_fetch_array($apt_table_rows_tag_related_words, MYSQL_NUM)){ //loop handling every row in the table
 			$apt_table_row_related_words_count = substr_count($apt_table_cell[1], ';') + 1; //variable prints number of related words in the current row that is being "browsed" by the while; must be +1 higher than the number of semicolons!
@@ -330,7 +474,7 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 					$apt_table_cell_substrings = explode(';', $apt_table_cell[1], $apt_table_row_related_words_count);
 
 					//trimming the substring - it no multiple whitespace characters etc. are removed
-					$apt_substring_needle = ' '. strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $apt_table_cell_substrings[$i])) .' ';
+					$apt_substring_needle = ' '. preg_replace("/[^a-zA-Z0-9\s]/", ' ', strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $apt_table_cell_substrings[$i]))) .' ';
 					$apt_substring_needle_wildcards = '/'. str_replace('*', '([a-zA-Z0-9]*)', $apt_substring_needle) .'/';
 
 
@@ -350,7 +494,7 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 
 
 			//trimming the tag - it no multiple whitespace characters etc. are removed
-			$apt_tag_needle = ' '. strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $apt_table_cell[0])) .' ';
+			$apt_tag_needle = ' '. preg_replace("/[^a-zA-Z0-9\s]/", ' ', strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $apt_table_cell[0]))) .' ';
 
 			//searching for tags (note for future me-dumbass: we do not want to check for wildcards, they cannot be used in tags, moron!
 			if($apt_table_related_word_found == 0){ //do not continue searching if the related word has been found
@@ -400,21 +544,31 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 
 if(is_admin()){ //these functions will be executed only if the admin panel is being displayed for performance reasons
 	add_action('admin_menu', 'apt_menu_link');
+	add_action('admin_notices', 'apt_plugin_admin_notices', 20); //check for admin notices
 
+	//for performance issues
 	if($GLOBALS['pagenow'] == 'plugins.php'){ //check if the admin is on page plugins.php
 		add_filter('plugin_action_links', 'apt_plugin_action_links', 12, 2);
 		add_filter('plugin_row_meta', 'apt_plugin_meta_links', 12, 2);
 	}
-
-	if(in_array($GLOBALS['pagenow'], array('plugins.php', 'update-core.php'))){ //check if the admin is on pages update-core.php, plugins.php
-		add_action('plugins_loaded', 'apt_update_plugin'); 
-
+	if(in_array($GLOBALS['pagenow'], array('plugins.php', 'update-core.php', 'update.php'))){ //check if the admin is on pages update-core.php, plugins.php or update.php
+		add_action('plugins_loaded', 'apt_update_plugin');
 		register_activation_hook(__FILE__, 'apt_install_plugin');
 		register_uninstall_hook(__FILE__, 'apt_uninstall_plugin');
 	}
-	add_action('admin_notices', 'apt_plugin_admin_notices', 20); //check for admin notices
-}
 
+	if($GLOBALS['pagenow'] == 'options-general.php'){ //check if the admin is on page options-general.php
+		add_action('admin_print_scripts', 'apt_settings_page_javascript'); //script for changing backgrounds of inputs
+	}
+	if(in_array($GLOBALS['pagenow'], array('post.php', 'post-new.php'))){ //check if the admin is on pages post.php, post-new.php
+		add_action('admin_print_scripts', 'apt_custom_box_ajax'); //AJAX for saving a new tag
+		add_action('add_meta_boxes', 'apt_custom_box_add'); //add box to the post editor
+	}
+	add_action('wp_ajax_apt_custom_box_save_tag', 'apt_custom_box_save_tag'); //callback for function saving the tag from meta_box - this must not be in the condition before or it will not work
+
+}//-is_admin
+
+//executes after every page reload!!
 if(get_option('apt_miscellaneous_tagging_occasion') == 1){ //trigger tagging when publishing the post
 	add_action('publish_post','apt_tagging_algorithm', 25); //lower priority (default 10), accepted args = 1
 }
@@ -451,82 +605,30 @@ if(isset($_POST['apt_save_settings_button'])){ //saving all form data
 		update_option('apt_miscellaneous_tag_maximum', $_POST['apt_miscellaneous_tag_maximum']);
 	}
 	else{
-		echo '<div class="error"><p><b>Error:</b> The option "apt_miscellaneous_tag_maximum" couldn\'t be saved because the sent value wasn\'t numeric.</p></div>'; //user-moron scenario
+		echo '<div id="message" class="error"><p><b>Error:</b> The option "apt_miscellaneous_tag_maximum" couldn\'t be saved because the sent value wasn\'t numeric.</p></div>'; //user-moron scenario
 	}
 
-	echo '<div class="updated"><p>Your settings have been saved.</p></div>'; //confirm message
+	echo '<div id="message" class="updated"><p>Your settings have been saved.</p></div>'; //confirm message
 }
 
 if(isset($_POST['apt_restore_default_settings_button'])){ //resetting settings
 	apt_uninstall_plugin();
 	apt_install_plugin();
-	echo '<div class="updated"><p>Default settings have been restored.</p></div>'; //confirm message
+	echo '<div id="message" class="updated"><p>Default settings have been restored.</p></div>'; //confirm message
 }
 
 
 #################### tag management ##############################
 if(isset($_POST['apt_create_a_new_tag_button'])){ //creating a new tag wuth relaterd words
-
-$lol = mysql_query("SELECT id FROM $apt_table WHERE tag = '". $_POST['apt_create_tag'] ."' LIMIT 0,1");
-
-if(empty($_POST['apt_create_tag'])){ //checking if the value of the tag isn't empty
-	echo '<div class="error"><p><b>Error:</b> You can\'t create a tag that does not have a name.</p></div>';
+	apt_create_a_new_tag($_POST['apt_create_tag_name'],$_POST['apt_create_tag_related_words']);
 }
-	else{
-		if(mysql_num_rows($lol)){ //checking if the tag exists
-			echo '<div class="error"><p><b>Error:</b> Tag <b>"'. $_POST['apt_create_tag'] .'"</b> already exists!</p></div>';
-		} 
-		else{ //if the tag is not in DB, create one
-
-			$apt_created_tag_trimmed = trim($_POST['apt_create_tag']); //replacing ONLY whitespace characters from beginning and end (we could remove multiple characters like ';', but they are not used here to separate anything, so we let the user to do what he/she wants)
-			$apt_created_related_words_trimmed = preg_replace(array('/\s{2,}/', '/[\t\n]/'), ' ', $_POST['apt_create_related_words']); //replacing multiple whitespace characters with a space (we could replace them completely, but that might annoy users)
-			$apt_created_related_words_trimmed = preg_replace('{;+}', ';', $apt_created_related_words_trimmed); //replacing multiple semicolons with one
-			$apt_created_related_words_trimmed = preg_replace('/[\*]+/', '*', $apt_created_related_words_trimmed); //replacing multiple asterisks with one
-			$apt_created_related_words_trimmed = trim(trim(trim($apt_created_related_words_trimmed), ';')); //trimming semicolons and whitespace characters from the beginning and the end
-
-			mysql_query("INSERT IGNORE INTO $apt_table (tag, related_words) VALUES ('". $apt_created_tag_trimmed ."', '". $apt_created_related_words_trimmed ."')");
-			update_option('apt_stats_current_tags', mysql_num_rows(mysql_query("SELECT id FROM $apt_table"))); //update stats
-
-
-			echo '<div class="updated"><p>Tag <b>"'. $apt_created_tag_trimmed .'"</b> with '; //confirm message with a condition displaying related words if available
-				if(empty($apt_created_related_words_trimmed)){
-					echo 'no related words';
-				}else{
-					if(strstr($apt_created_related_words_trimmed, ';')){ //print single or plural form
-						echo 'related words <b>"'. $apt_created_related_words_trimmed .'"</b>';
-					}
-					else{
-						echo 'related word <b>"'. $apt_created_related_words_trimmed .'"</b>';
-					}
-
-				}
-			echo ' has been created.</p></div>';
-
-			//warning messages appearing when "unexpected" character are being saved
-			if(preg_match("/[^a-zA-Z0-9\s]/", iconv('UTF-8', 'ASCII//TRANSLIT', $apt_created_tag_trimmed))){ //user-moron scenario
-				echo '<div class="error"><p><b>Warning:</b> Tag name <b>"'. $apt_created_tag_trimmed .'"</b> contains non-alphanumeric characters.</p></div>'; //warning message
-			}
-			if(preg_match("/[^a-zA-Z0-9\s\;\*]/", iconv('UTF-8', 'ASCII//TRANSLIT', $apt_created_related_words_trimmed))){ //user-moron scenario
-				echo '<div class="error"><p><b>Warning:</b> Related words "'. $apt_created_related_words_trimmed .'" contain non-alphanumeric characters.</p></div>'; //warning message
-			}
-			if(strstr($apt_created_related_words_trimmed, ' ;') OR strstr($apt_created_related_words_trimmed, '; ')){ //user-moron scenario
-				echo '<div class="error"><p><b>Warning:</b> Related words "'. $apt_created_related_words_trimmed .'" contain extra space near the semicolon.</p></div>'; //warning message
-			}
-			if(strstr($apt_created_related_words_trimmed, '*') AND (get_option('apt_miscellaneous_wildcards') == 0)){ //user-moron scenario
-				echo '<div class="error"><p><b>Warning:</b> Your related words contain an asterisk, but using wildcards is currently disabled!</p></div>'; //warning message
-			}
-
-
-		}//--else
-	}//--else
-}//--if
 
 
 if(isset($_POST['apt_delete_all_tags_button'])){ //delete all records from $apt_table
 	mysql_query('TRUNCATE TABLE '. $apt_table);
 	update_option('apt_stats_current_tags', '0'); //reset stats
 
-	echo '<div class="updated"><p>All tags have been deleted.</p></div>';
+	echo '<div id="message" class="updated"><p>All tags have been deleted.</p></div>';
 }
 
 if(isset($_POST['apt_delete_chosen_tags_button'])){ //delete chosen records from $apt_table
@@ -536,10 +638,10 @@ if(isset($_POST['apt_delete_chosen_tags_button'])){ //delete chosen records from
 		}
 		update_option('apt_stats_current_tags', mysql_num_rows(mysql_query("SELECT id FROM $apt_table"))); //update stats
 
-		echo '<div class="updated"><p>All chosen tags have been deleted.</p></div>';
+		echo '<div id="message" class="updated"><p>All chosen tags have been deleted.</p></div>';
 	}
 	else{
-		echo '<div class="error"><p><b>Error:</b> You must choose at least one tag in order to delete it.</p></div>';
+		echo '<div id="message" class="error"><p><b>Error:</b> You must choose at least one tag in order to delete it.</p></div>';
 	}
 }
 
@@ -578,23 +680,23 @@ if(isset($_POST['apt_save_tags_button'])){ //saving changed tags
 		}
 	}
 
-	echo '<div class="updated"><p>All tags have been saved.</p></div>';
+	echo '<div id="message" class="updated"><p>All tags have been saved.</p></div>';
 
 	//warning messages appearing when "unexpected" character are being saved - user-moron scenarios
 	if($apt_saved_tag_empty_error == 1){
-		echo '<div class="error"><p><b>Error:</b> Some tag names were saved as empty strings, their previous values were restored.</p></div>'; //warning message
+		echo '<div id="message" class="error"><p><b>Error:</b> Some tag names were saved as empty strings, their previous values were restored.</p></div>'; //warning message
 	}
 	if($apt_saved_tag_aplhanumeric_warning == 1){
-		echo '<div class="error"><p><b>Warning:</b> Some tag names contain non-alphanumeric characters.</p></div>'; //warning message
+		echo '<div id="message" class="error"><p><b>Warning:</b> Some tag names contain non-alphanumeric characters.</p></div>'; //warning message
 	}
 	if($apt_saved_related_words_aplhanumeric_warning == 1){
-		echo '<div class="error"><p><b>Warning:</b> Some related words contain non-alphanumeric characters.</p></div>'; //warning message
+		echo '<div id="message" class="error"><p><b>Warning:</b> Some related words contain non-alphanumeric characters.</p></div>'; //warning message
 	}
 	if($apt_saved_related_words_extra_spaces_warning == 1){
-		echo '<div class="error"><p><b>Warning:</b> Some related words contain extra spaces near semicolons.</p></div>'; //warning message
+		echo '<div id="message" class="error"><p><b>Warning:</b> Some related words contain extra spaces near semicolons.</p></div>'; //warning message
 	}
 	if($apt_saved_related_words_asterisk_warning == 1){
-		echo '<div class="error"><p><b>Warning:</b> Your related words contain an asterisk, but using wildcards is currently disabled!</p></div>'; //warning message
+		echo '<div id="message" class="error"><p><b>Warning:</b> Your related words contain an asterisk, but using wildcards is currently disabled!</p></div>'; //warning message
 	}
 }
 
@@ -605,7 +707,7 @@ if(isset($_POST['apt_import_existing_tags_button'])){ //import current tags
 
 	$apt_table_select_current_tags = mysql_query('SELECT name FROM '. $apt_wp_terms .' NATURAL JOIN '. $apt_wp_term_taxonomy .' WHERE taxonomy="post_tag"');
 	while($apt_tag_id = mysql_fetch_array($apt_table_select_current_tags, MYSQL_NUM)){ //run loop to process all tags
-       		mysql_query("INSERT IGNORE INTO $apt_table(tag,related_words) VALUES('". $apt_tag_id[0] ."','')");
+	   		mysql_query("INSERT IGNORE INTO $apt_table(tag,related_words) VALUES('". $apt_tag_id[0] ."','')");
 		$apt_current_tags++;
 
 		if(preg_match("/[^a-zA-Z0-9\s]/", iconv('UTF-8', 'ASCII//TRANSLIT', $apt_tag_id[0]))){ //user-moron scenario
@@ -615,14 +717,14 @@ if(isset($_POST['apt_import_existing_tags_button'])){ //import current tags
 
 	if($apt_current_tags != 0){
 		update_option('apt_stats_current_tags', mysql_num_rows(mysql_query("SELECT id FROM $apt_table"))); //update stats
-		echo '<div class="updated"><p>All <b>'. $apt_current_tags .'</b> tags have been imported.</p></div>'; //confirm message
+		echo '<div id="message" class="updated"><p>All <b>'. $apt_current_tags .'</b> tags have been imported.</p></div>'; //confirm message
 
 		if($apt_imported_current_tag_aplhanumeric_warning == 1){
-			echo '<div class="error"><p><b>Warning:</b> Some tag names contain non-alphanumeric characters.</p></div>'; //warning message
+			echo '<div id="message" class="error"><p><b>Warning:</b> Some tag names contain non-alphanumeric characters.</p></div>'; //warning message
 		}
 	}
 	else{
-		echo '<div class="error"><p><b>Error:</b> There aren\'t any tags in your database.</p></div>'; //confirm message
+		echo '<div id="message" class="error"><p><b>Error:</b> There aren\'t any tags in your database.</p></div>'; //confirm message
 	}
 
 }
@@ -660,30 +762,30 @@ if(isset($_POST['apt_import_from_a_backup_button'])){ //import a backup file
 			fclose($apt_backup_file_import_handle);
 
 			update_option('apt_stats_current_tags', mysql_num_rows(mysql_query("SELECT id FROM $apt_table"))); //update stats
-			echo '<div class="updated"><p>All tags from your backup have been imported.</p></div>';
+			echo '<div id="message" class="updated"><p>All tags from your backup have been imported.</p></div>';
 
 			if($apt_imported_tag_aplhanumeric_warning == 1){
-				echo '<div class="error"><p><b>Warning:</b> Some tag names contain non-alphanumeric characters.</p></div>'; //warning message
+				echo '<div id="message" class="error"><p><b>Warning:</b> Some tag names contain non-alphanumeric characters.</p></div>'; //warning message
 			}
 			if($apt_imported_related_words_asterisk_warning == 1){
-				echo '<div class="error"><p><b>Warning:</b> Your related words contain an asterisk, but using wildcards is currently disabled!</p></div>'; //warning message
+				echo '<div id="message" class="error"><p><b>Warning:</b> Your related words contain an asterisk, but using wildcards is currently disabled!</p></div>'; //warning message
 			}
 			if($apt_imported_related_words_aplhanumeric_warning == 1){
-				echo '<div class="error"><p><b>Warning:</b> Some related words contain non-alphanumeric characters.</p></div>'; //warning message
+				echo '<div id="message" class="error"><p><b>Warning:</b> Some related words contain non-alphanumeric characters.</p></div>'; //warning message
 			}
 			if($apt_imported_related_words_extra_spaces_warning == 1){
-				echo '<div class="error"><p><b>Warning:</b> Some related words contain extra spaces near semicolons.</p></div>'; //warning message
+				echo '<div id="message" class="error"><p><b>Warning:</b> Some related words contain extra spaces near semicolons.</p></div>'; //warning message
 			}
 			if($apt_imported_tag_empty_error == 1){
-				echo '<div class="error"><p><b>Error:</b> Some tags weren\'t imported because their names were missing.</p></div>'; //warning message
+				echo '<div id="message" class="error"><p><b>Error:</b> Some tags weren\'t imported because their names were missing.</p></div>'; //warning message
 			}
 		}
 		else{ //cannot upload file
-			echo '<div class="error"><p><b>Error:</b> The file could not be uploaded.</p></div>'; //error message
+			echo '<div id="message" class="error"><p><b>Error:</b> The file could not be uploaded.</p></div>'; //error message
 		}
 	}
 	else{ //the file name is invalid
-		echo '<div class="error"><p><b>Error:</b> The name of the imported file must be "'. $apt_backup_file_name .'".</p></div>'; //error message
+		echo '<div id="message" class="error"><p><b>Error:</b> The name of the imported file must be "'. $apt_backup_file_name .'".</p></div>'; //error message
 	}
 }
 if(isset($_POST['apt_create_a_backup_button'])){ //creating backup
@@ -699,10 +801,10 @@ if(isset($_POST['apt_create_a_backup_button'])){ //creating backup
 	@fclose($apt_backup_file_export);
 
 	if(file_exists($apt_backup_file_export_dir)){
-		echo '<div class="updated"><p>Your <a href="'. $apt_backup_file_export_url .'">backup</a> has been created.</p></div>';
+		echo '<div id="message" class="updated"><p>Your <a href="'. $apt_backup_file_export_url .'">backup</a> has been created.</p></div>';
 	}
 	else{
-		echo '<div class="error"><p><b>Error:</b> Your backup could not be created. Change the permissions of the directory <code>'. dirname(__FILE__) .'</code> to 777 first.</p></div>'; //error message
+		echo '<div id="message" class="error"><p><b>Error:</b> Your backup could not be created. Change the permissions of the directory <code>'. dirname(__FILE__) .'</code> to 777 first.</p></div>'; //error message
 	}
 
 }
@@ -721,19 +823,19 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 	### USER-MORON SCENARIOS
 	if (mysql_num_rows(mysql_query('SELECT id FROM '. $apt_table)) == 0){
 		$apt_assign_tags_to_all_posts_error = 1;
-		echo '<div class="error"><p><b>Error:</b> There aren\'t any tags that can be added to posts.</p></div>';
+		echo '<div id="message" class="error"><p><b>Error:</b> There aren\'t any tags that can be added to posts.</p></div>';
 	}
 	if(mysql_num_rows($apt_table_select_posts) == 0){
 		$apt_assign_tags_to_all_posts_error = 1;
-		echo '<div class="error"><p><b>Error:</b> There aren\'t any posts that can be processed.</p></div>';
+		echo '<div id="message" class="error"><p><b>Error:</b> There aren\'t any posts that can be processed.</p></div>';
 	}
 	if($apt_tag_maximum == 0){
 		$apt_assign_tags_to_all_posts_error = 1;
-		echo '<div class="error"><p><b>Error:</b> The maximum number of tags per post is set to <b>zero</b>. No tags can\'t be added!</p></div>';
+		echo '<div id="message" class="error"><p><b>Error:</b> The maximum number of tags per post is set to <b>zero</b>. No tags can be added!</p></div>';
 	}
 	if(get_option('apt_post_analysis_title') == 0 AND get_option('apt_post_analysis_content') == 0 AND get_option('apt_post_analysis_excerpt') == 0){
 		$apt_assign_tags_to_all_posts_error = 1;
-		echo '<div class="error"><p><b>Error:</b> The script isn\'t allowed to analyze any content.</p></div>';
+		echo '<div id="message" class="error"><p><b>Error:</b> The script isn\'t allowed to analyze any content.</p></div>';
 	}
 	#################################################################
 
@@ -742,7 +844,7 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 			apt_tagging_algorithm($apt_post_id[0], 'nocheck'); //send the current post ID and '1' to let the script know that we do not want to check user-moron scenarios again
 		}//-while
 
-		echo '<div class="updated"><p>Automatic Post Tagger has processed '. $apt_table_wp_post_count .' posts.</p></div>';
+		echo '<div id="message" class="updated"><p>Automatic Post Tagger has processed '. $apt_table_wp_post_count .' posts.</p></div>';
 	}
 }
 #################################################################
@@ -784,8 +886,8 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 					<ul>
 					<li><a class="apt_sidebar_link apt_rate" href="http://wordpress.org/extend/plugins/automatic-post-tagger">Rate plugin at WordPress.org</a></li>
 					<li><a class="apt_sidebar_link apt_wp_new_post" href="<?php echo admin_url('post-new.php'); ?>">Review this plugin on your blog</a></li>
-					<li><a class="apt_sidebar_link apt_twitter" href="http://twitter.com/home?status=Automatic Post Tagger - useful WordPress plugin that automatically adds user-specified tags to posts and pages. http://wordpress.org/extend/plugins/automatic-post-tagger">Post a link to Twitter</a></li>
-					<li><a class="apt_sidebar_link apt_facebook" href="http://www.facebook.com/sharer.php?u=http://wordpress.org/extend/plugins/automatic-post-tagger&amp;t=Automatic Post Tagger%20-%20useful%20WordPress%20plugin%20that%20automatically%20adds%20user-specified%20tags%20to%20posts%20and%20pages%20.">Post a link to Facebook</a></li>
+					<li><a class="apt_sidebar_link apt_twitter" href="http://twitter.com/home?status=Automatic Post Tagger - useful WordPress plugin that automatically adds user-defined tags to posts and pages. http://wordpress.org/extend/plugins/automatic-post-tagger">Post a link to Twitter</a></li>
+					<li><a class="apt_sidebar_link apt_facebook" href="http://www.facebook.com/sharer.php?u=http://wordpress.org/extend/plugins/automatic-post-tagger&amp;t=Automatic Post Tagger%20-%20useful%20WordPress%20plugin%20that%20automatically%20adds%20user-defined%20tags%20to%20posts%20and%20pages%20.">Post a link to Facebook</a></li>
 
 					</ul>
 
@@ -796,9 +898,9 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 			
 			<!-- postbox -->
 			<div class="postbox">
-				<h3>Recent contributors<span style="float:right;"><small><a href="http://wordpress.org/extend/plugins/automatic-post-tagger/donors">Full list</a></small></span></h3>
+				<h3>Recent contributors<span style="float:right;"><small><a href="http://wordpress.org/extend/plugins/automatic-post-tagger/other_notes">Full list</a></small></span></h3>
 				<div class="inside">
-					<p><iframe border="0" allowtransparency="yes" style="width:100%; height:135px;" src="http://devtard.com/projects/automatic-post-tagger/contributors.php" frameborder="0" scrolling="no">List of recent contributors</iframe></p>
+					<p><iframe border="0" allowtransparency="yes" style="width:100%; height:35px;" src="http://devtard.com/projects/automatic-post-tagger/contributors.php" frameborder="0" scrolling="no">List of recent contributors</iframe></p>
 				</div>
 			</div><!-- //-postbox -->
 		</div><!-- //-side-sortables -->
@@ -818,26 +920,26 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 						<p>
 							<b>Post analysis</b><br />
 							<small>Where should Automatic Post Tagger look for tags and their related words?</small><br />
-							<label><input type="checkbox" name="apt_post_analysis_title" <?php if(get_option('apt_post_analysis_title') == 1) echo 'checked="checked"'; ?>> Title</label><br />
-							<label><input type="checkbox" name="apt_post_analysis_content" <?php if(get_option('apt_post_analysis_content') == 1) echo 'checked="checked"'; ?>> Content</label><br />
-							<label><input type="checkbox" name="apt_post_analysis_excerpt" <?php if(get_option('apt_post_analysis_excerpt') == 1) echo 'checked="checked"'; ?>> Excerpt</label>
+							<input type="checkbox" name="apt_post_analysis_title" id="apt_post_analysis_title" <?php if(get_option('apt_post_analysis_title') == 1) echo 'checked="checked"'; ?>> <label for="apt_post_analysis_title">Title</label><br />
+							<input type="checkbox" name="apt_post_analysis_content" id="apt_post_analysis_content" <?php if(get_option('apt_post_analysis_content') == 1) echo 'checked="checked"'; ?>> <label for="apt_post_analysis_content">Content</label><br />
+							<input type="checkbox" name="apt_post_analysis_excerpt" id="apt_post_analysis_excerpt" <?php if(get_option('apt_post_analysis_excerpt') == 1) echo 'checked="checked"'; ?>> <label for="apt_post_analysis_excerpt">Excerpt</label>
 						</p>	
 						<p>
 							<b>Handling current tags</b><br />
 							<small>What should the plugin do if posts already have tags?</small><br />
-							<label><input type="radio" name="apt_handling_current_tags" value="1" <?php if(get_option('apt_handling_current_tags') == 1) echo 'checked="checked"'; ?>> Append new tags to old tags</label><br />
-							<label><input type="radio" name="apt_handling_current_tags" value="2" <?php if(get_option('apt_handling_current_tags') == 2) echo 'checked="checked"'; ?>> Replace old tags with newly generated tags</label><br />
-							<label><input type="radio" name="apt_handling_current_tags" value="3" <?php if(get_option('apt_handling_current_tags') == 3) echo 'checked="checked"'; ?>> Do nothing</label>
+							<input type="radio" name="apt_handling_current_tags" id="apt_handling_current_tags_1" value="1" <?php if(get_option('apt_handling_current_tags') == 1) echo 'checked="checked"'; ?>> <label for="apt_handling_current_tags_1">Append new tags to old tags</label><br />
+							<input type="radio" name="apt_handling_current_tags" id="apt_handling_current_tags_2" value="2" <?php if(get_option('apt_handling_current_tags') == 2) echo 'checked="checked"'; ?>> <label for="apt_handling_current_tags_2">Replace old tags with newly generated tags</label><br />
+							<input type="radio" name="apt_handling_current_tags" id="apt_handling_current_tags_3" value="3" <?php if(get_option('apt_handling_current_tags') == 3) echo 'checked="checked"'; ?>> <label for="apt_handling_current_tags_3">Do nothing</label>
 						</p>
 						<p>
 							<b>Miscellaneous</b><br />
-							<label>Maximum number of tags per one post: <input type="text" name="apt_miscellaneous_tag_maximum" value="<?php echo get_option('apt_miscellaneous_tag_maximum'); ?>" maxlength="10" size="3"></label><br />
-							<label>Run tagging algorithm after a post is 
+							<label for="apt_miscellaneous_tag_maximum">Maximum number of tags per one post:</label> <input type="text" name="apt_miscellaneous_tag_maximum" id="apt_miscellaneous_tag_maximum" value="<?php echo get_option('apt_miscellaneous_tag_maximum'); ?>" maxlength="10" size="3"><br />
+							Run tagging algorithm after a post is 
 								<select size="1" name="apt_miscellaneous_tagging_occasion">
 									<option value="1" <?php if(get_option('apt_miscellaneous_tagging_occasion') == 1){ echo ' selected="selected"'; } ?>>published/updated</option>
 									<option value="2" <?php if(get_option('apt_miscellaneous_tagging_occasion') == 2){ echo ' selected="selected"'; } ?> onClick="alert('Warning: The tagging algorithm will run after every manual and automatic saving of a post!')">saved</option>
 								</select>.<br />
-							<label><input type="checkbox" name="apt_miscellaneous_wildcards" <?php if(get_option('apt_miscellaneous_wildcards') == 1) echo 'checked="checked"'; ?>> Use wildcard (*) to substistute any aplhanumeric characters in related words<br />
+							<input type="checkbox" name="apt_miscellaneous_wildcards" id="apt_miscellaneous_wildcards" <?php if(get_option('apt_miscellaneous_wildcards') == 1) echo 'checked="checked"'; ?>> <label for="apt_miscellaneous_wildcards">Use wildcard (*) to substistute any aplhanumeric characters in related words</label><br />
 							<small>(Example: pattern "cat*" will match words "cats" and "category", pattern "c*t" will match "cat" and "colt".)</small></label>
 						</p>
 						
@@ -856,20 +958,20 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 					<h3>Create a new tag</h3>
 					<div class="inside">
 
-						<p><table style="width:100%;">
+						<table style="width:100%;">
 						<tr>
 							<td style="width:30%;">Tag name <small>(example: <i>cat</i>)</small>:</td>
 							<td style="width:68%;">Related words, separated by a semicolon <small>(example: <i>cats;kitty;meo*w</i>) (optional)</small>:</td></tr>
 						<tr>
-							<td><input style="width:100%;" type="text" name="apt_create_tag" maxlength="255"></td>
-							<td><input style="width:100%;" type="text" name="apt_create_related_words" maxlength="255"></td>
+							<td><input style="width:100%;" type="text" name="apt_create_tag_name" maxlength="255"></td>
+							<td><input style="width:100%;" type="text" name="apt_create_tag_related_words" maxlength="255"></td>
 						</tr>
 						</table></p>
 
 
 						<p>
 							<input class="button-highlighted" type="submit" name="apt_create_a_new_tag_button" value=" Create a new tag ">
-						</p>
+							<span style="float:right;"><b>Tip:</b> You can also create tags directly from a widget located under the post editor.</span>		
 					</div>
 				</div>
 				</form>
@@ -882,7 +984,6 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 					<h3>Import tags</h3>
 					<div class="inside">
 
-						<p>
 						<table border="0" width="100%">
 						<tr>
 							<td>Import all tags that are already in your database:</td>
@@ -894,7 +995,6 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 							<input class="button" type="submit" name="apt_import_from_a_backup_button" value=" Import from a backup ">
 						</td></tr>
 						</table>
-						</p>
 					</div>
 				</div>
 				</form>
@@ -916,21 +1016,21 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 						else{
 						?>
 
-							<p><div style="max-height:400px;overflow:auto;"><table style="width:100%;">
+							<div style="max-height:400px;overflow:auto;"><table style="width:100%;">
 							<tr><td style="width:30%;">Tag name</td><td style="width:68%;">Related words</td><td style="width:2%;"></td></tr>
 
 						<?php
 							while($row = mysql_fetch_array($apt_table_rows_all)){
 							?>
 								<tr>
-								<td><input style="width:100%;" type="text" name="apt_taglist_tag_[<?php echo $row['id']; ?>]" value="<?php echo $row['tag']; ?>" maxlength="255"></td>
-								<td><input style="width:100%;" type="text" name="apt_taglist_related_words_[<?php echo $row['id']; ?>]" value="<?php echo $row['related_words']; ?>" maxlength="255"></td>
-								<td><input style="width:10px;" type="checkbox" name="apt_taglist_checkbox_[<?php echo $row['id']; ?>]"></td>
+								<td><input style="width:100%;" type="text" name="apt_taglist_tag_[<?php echo $row['id']; ?>]" id="apt_taglist_tag_<?php echo $row['id']; ?>" value="<?php echo $row['tag']; ?>" maxlength="255"></td>
+								<td><input style="width:100%;" type="text" name="apt_taglist_related_words_[<?php echo $row['id']; ?>]" id="apt_taglist_related_words_<?php echo $row['id']; ?>" value="<?php echo $row['related_words']; ?>" maxlength="255"></td>
+								<td><input style="width:10px;" type="checkbox" name="apt_taglist_checkbox_[<?php echo $row['id']; ?>]" id="apt_taglist_checkbox_<?php echo $row['id']; ?>" onclick="apt_change_background(<?php echo $row['id']; ?>);"></td>
 								</tr>
 							<?php
 							}
 						?>
-							</table></div></p>
+							</table></div>
 
 						<p style="margin-top:20px;">
 						<input class="button-highlighted" type="submit" name="apt_save_tags_button" value=" Save changes ">
@@ -957,7 +1057,7 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 				<div class="postbox">
 					<h3>Assign tags to all posts</h3>
 					<div class="inside">
-						<p>This tool adds tags to all posts which post status isn't "trash", "draft" or "auto-draft". It follows rules specified above.
+						<p>This tool adds tags to all posts which post status isn't "trash", "draft" or "auto-draft". It follows rules defined above.
 						<br />Make sure that you understand how it will behave before you hit the button, any changes can't be reversed.</p>
 
 						<p style="margin-top:20px;">
