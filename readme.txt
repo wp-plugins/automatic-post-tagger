@@ -10,7 +10,7 @@ License: GPLv2
 This plugin automatically adds user-defined tags to posts.
 
 == Description ==
-With APT you won't have to manually add tags ever again. You just have to create a list of tags with related words for each of them and you are done. This plugin will add relevant tags automatically when a post is published or saved.
+With APT you won't have to manually add tags ever again. You just have to create a list of tags with related words for each of them and you are done. This plugin will add relevant tags automatically when a post is published or updated.
 
 = Features = 
 * Automatically adds tags to posts according to their title, content and excerpt
@@ -19,7 +19,7 @@ With APT you won't have to manually add tags ever again. You just have to create
 * Adds tags to all posts with just one click (three ways of handling already assigned tags)
 * Configurable maximum amount of tags per post (Automatic Post Tagger won't add more tags than you want)
 * Supports importing already existing tags, creating and importing backups
-* Workaround for Latin diacritic characters (non-Latin alphabets like Arabic or Chinese are not supported yet)
+* Workaround for Latin diacritic characters (non-Latin alphabets like Arabic or Chinese aren't supported yet)
 
 == Installation ==
 1. Upload the plugin to the '/wp-content/plugins/' directory.
@@ -32,7 +32,7 @@ With APT you won't have to manually add tags ever again. You just have to create
 
 == Frequently Asked Questions ==
 = Which plugin data is stored in the database? =
-Automatic Post Tagger stores tags and related words in a table called "wp_apt_tags". Following options can be found in the table "wp_options". Everything is deleted after uninstalling the plugin.
+Automatic Post Tagger stores tags and related words in a table called "wp_apt_tags". Following options can be found in the table "wp_options".
 
 * apt_plugin_version
 * apt_stats_current_tags
@@ -45,39 +45,65 @@ Automatic Post Tagger stores tags and related words in a table called "wp_apt_ta
 * apt_post_analysis_content
 * apt_post_analysis_excerpt
 * apt_handling_current_tags
+* apt_string_manipulation_convert_diacritic
+* apt_string_manipulation_lowercase
+* apt_string_manipulation_strip_tags
+* apt_string_manipulation_replace_whitespaces
+* apt_string_manipulation_replace_nonalphanumeric
+* apt_string_manipulation_ignore_asterisks
+* apt_word_recognition_separators
 * apt_miscellaneous_tag_maximum
-* apt_miscellaneous_tagging_occasion
 * apt_miscellaneous_wildcards
 
 = What happens after deleting the plugin? Will I have to remove its options etc. from my database? =
 No. All plugin data will be automatically removed from your database after you delete the plugin via your administration interface.
 
-= How does searching for tags and related words work? =
-Automatic Post Tagger does not work with strings obtained from the database (post title, content and excerpt) directly. After joining all needed strings together it flattens some UTF-8 characters to their basic ASCII counterparts. Then it lowercases the whole string, removes all HTML, PHP and JS tags and replaces multiple whitespace and non-alphanumeric characters with spaces. Diacritic characters in strings that are searched for are also converted to their ASCII equivalents. This workaround is not ideal, but it should work for everyone just fine. In the next version users may gain more control over these actions.
+= I get the "Maximum execution time of XY seconds exceeded" error when trying to assign tags to all posts. =
+Delete all word separators and use the option "Replace non-alphanumeric characters with spaces".
 
-= I cannot delete tags assigned by the plugin, it recreates them again! What should I do? =
+= I can't delete tags assigned by the plugin, it recreates them again! What should I do? =
 If you are trying to delete tags from a published post you have to deactivate the plugin in order to delete tags.
 
-= I got a warning message that said that saved tag name/related words contain non-alphanumeric characters. What does that mean?  =
+= I got a warning message that saying that saved tag name/related words contain non-alphanumeric characters. What does that mean?  =
 Your tag name or related words contain different characters than letters, numbers and asterisks. Your data were successfully saved into database but you may want to check the values again to make sure that you accidentally didn't make a typo. Non-alphanumeric characters in posts and your tags/related words are converted to spaces during searching for tags.
 
 = Some tags can't be imported from my backup. Why? =
 You are most likely trying to import records with duplicate tag names which are ignored by the plugin.
 
 = ATP doesn't add tags even if they or their related words are in my post! =
-This may happen if you put a PHP code in your post that doens't have opening/closing tags ("<?php" and "?>").
+This may happen if you put a PHP code in your post that doesn't have correct opening/closing tags (`<?php` and `?>`).
 
-= Something does not work. What should I do? =
-Try reinstalling the plugin.
+= APT doesn't add unusual tags to my posts, for example HTML tags like`<a>`. =
+WordPress isn't able to do that, it just saves gibberish or an ampty string to the database.
 
-= I have another problem that is not described on this page and wasn't solved by reinstalling. =
-Post a new thread on the [support forum](http://wordpress.org/support/plugin/automatic-post-tagger "support forum").
+= Which tag will be added if I want to add only one tag per post? =
+The one that has the lowest ID (and was found in your post, of course).
+
+= I have another problem that isn't described on this page and wasn't solved by reinstalling the plugin. =
+Please post a new thread on the [support forum](http://wordpress.org/support/plugin/automatic-post-tagger "support forum").
 
 == Donors ==
 = Recent donations =
 Nobody has donated yet. Be the first and have your link displayed here!
 
 == Changelog ==
+= 1.2 =
+* New feature: Custom word separators
+* New feature: Option for converting diacritic characters to their ASCII equivalents
+* New feature: Option for lowercasing strings
+* New feature: Option for stripping PHP/HTML tags
+* New feature: Option for replacing non-alphanumeric characters with spaces
+* New feature: Option for ignoring asterisks when replacing non-alphanumeric characters with spaces
+* New feature: Option for replacing whitespace characters with spaces
+* Fixed: Bug causing adding duplicate tags to an array (resulting in less space for other tags if the tag limit is set too low)
+* Fixed: Bug preventing the script from calculating the max. number of tags that can be added to a post in the case when we don't want to append tags 
+* Fixed: Pressing enter when typing in the APT widget doesn't submit the form anymore
+* Removed: Option "apt_miscellaneous_tagging_occasion" (tagging algorithm can't be run when saving a post anymore - only for debugging purposes)
+* Removed: Facebook share link
+* Changed: APT is searching for tags only when no substrings were found (more efficient)
+* Changed: Variables in foreach loops are being unsetted
+* Changed: Update messages now use htmlspecialchars() to display names of tags and related words
+
 = 1.1 =
 * New feature: Meta box located under the post editor allowing adding tags directly to the database.
 * New feature: Background color of inputs changes when we check the checkbox
@@ -94,6 +120,9 @@ Nobody has donated yet. Be the first and have your link displayed here!
 * Initial release
 
 == Upgrade Notice ==
+= 1.2 =
+* New features: Customizable word separators and more control over the searching process.
+
 = 1.1 =
 * New feature: You can create tags directly from a widget under the post editor now.
 

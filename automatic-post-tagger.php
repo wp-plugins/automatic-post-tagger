@@ -3,7 +3,7 @@
 Plugin Name: Automatic Post Tagger
 Plugin URI: http://wordpress.org/extend/plugins/automatic-post-tagger
 Description: This plugin automatically adds user-defined tags to posts.
-Version: 1.1
+Version: 1.2
 Author: Devtard
 Author URI: http://devtard.com
 License: GPLv2 or later
@@ -99,7 +99,7 @@ function apt_plugin_admin_notices(){
 		}
 		if(isset($_GET['n']) AND $_GET['n'] == 2){
 			update_option('apt_admin_notice_update', 0); //hide update notice
-			echo '<div id="message" class="updated"><p><b>New feature in version '. get_option('apt_plugin_version') .':</b> You can create tags directly from a widget located under the post editor now.</p></div>'; //show new functions
+			echo '<div id="message" class="updated"><p><b>New features in version '. get_option('apt_plugin_version') .':</b> Customizable word separators and more control over the searching process.</p></div>'; //show new functions
 		}
 		if(isset($_GET['n']) AND $_GET['n'] == 3){
 			update_option('apt_admin_notice_donate', 0); //hide donation notice
@@ -144,7 +144,7 @@ function apt_create_a_new_tag($apt_tag_name,$apt_tag_related_words){
 	}
 		else{
 			if(mysql_num_rows($apt_table_tag_existence_check)){ //checking if the tag exists
-				echo '<div id="message" class="error"><p><b>Error:</b> Tag <b>"'. $apt_tag_name .'"</b> already exists!</p></div>';
+				echo '<div id="message" class="error"><p><b>Error:</b> Tag <b>"'. htmlspecialchars($apt_tag_name) .'"</b> already exists!</p></div>';
 			} 
 			else{ //if the tag is not in DB, create one
 
@@ -158,15 +158,15 @@ function apt_create_a_new_tag($apt_tag_name,$apt_tag_related_words){
 				update_option('apt_stats_current_tags', mysql_num_rows(mysql_query("SELECT id FROM $apt_table"))); //update stats
 
 
-				echo '<div id="message" class="updated"><p>Tag <b>"'. $apt_created_tag_trimmed .'"</b> with '; //confirm message with a condition displaying related words if available
+				echo '<div id="message" class="updated"><p>Tag <b>"'. htmlspecialchars($apt_created_tag_trimmed) .'"</b> with '; //confirm message with a condition displaying related words if available
 					if(empty($apt_created_related_words_trimmed)){
 						echo 'no related words';
 					}else{
 						if(strstr($apt_created_related_words_trimmed, ';')){ //print single or plural form
-							echo 'related words <b>"'. $apt_created_related_words_trimmed .'"</b>';
+							echo 'related words <b>"'. htmlspecialchars($apt_created_related_words_trimmed) .'"</b>';
 						}
 						else{
-							echo 'related word <b>"'. $apt_created_related_words_trimmed .'"</b>';
+							echo 'related word <b>"'. htmlspecialchars($apt_created_related_words_trimmed) .'"</b>';
 						}
 
 					}
@@ -174,13 +174,13 @@ function apt_create_a_new_tag($apt_tag_name,$apt_tag_related_words){
 
 				//warning messages appearing when "unexpected" character are being saved
 				if(preg_match("/[^a-zA-Z0-9\s]/", iconv('UTF-8', 'ASCII//TRANSLIT', $apt_created_tag_trimmed))){ //user-moron scenario
-					echo '<div id="message" class="error"><p><b>Warning:</b> Tag name <b>"'. $apt_created_tag_trimmed .'"</b> contains non-alphanumeric characters.</p></div>'; //warning message
+					echo '<div id="message" class="error"><p><b>Warning:</b> Tag name <b>"'. htmlspecialchars($apt_created_tag_trimmed) .'"</b> contains non-alphanumeric characters.</p></div>'; //warning message
 				}
 				if(preg_match("/[^a-zA-Z0-9\s\;\*]/", iconv('UTF-8', 'ASCII//TRANSLIT', $apt_created_related_words_trimmed))){ //user-moron scenario
-					echo '<div id="message" class="error"><p><b>Warning:</b> Related words "'. $apt_created_related_words_trimmed .'" contain non-alphanumeric characters.</p></div>'; //warning message
+					echo '<div id="message" class="error"><p><b>Warning:</b> Related words "'. htmlspecialchars($apt_created_related_words_trimmed) .'" contain non-alphanumeric characters.</p></div>'; //warning message
 				}
 				if(strstr($apt_created_related_words_trimmed, ' ;') OR strstr($apt_created_related_words_trimmed, '; ')){ //user-moron scenario
-					echo '<div id="message" class="error"><p><b>Warning:</b> Related words "'. $apt_created_related_words_trimmed .'" contain extra space near the semicolon.</p></div>'; //warning message
+					echo '<div id="message" class="error"><p><b>Warning:</b> Related words "'. htmlspecialchars($apt_created_related_words_trimmed) .'" contain extra space near the semicolon.</p></div>'; //warning message
 				}
 				if(strstr($apt_created_related_words_trimmed, '*') AND (get_option('apt_miscellaneous_wildcards') == 0)){ //user-moron scenario
 					echo '<div id="message" class="error"><p><b>Warning:</b> Your related words contain an asterisk, but using wildcards is currently disabled!</p></div>'; //warning message
@@ -199,15 +199,13 @@ function apt_custom_box_add(){ //add custom box
 }
 function apt_custom_box_content(){ //custom box content
 ?>
-	<form action="">
-	<p>Tag name: <input style="min-width:50px;width:100%;" type="text" id="apt_box_tag_name" name="apt_box_tag_name" value="" maxlength="255" /><br />
-	Related words (separated by semicolons): <input style="min-width:50px;width:100%;" type="text" id="apt_box_tag_related_words" name="apt_box_tag_related_words" value="" maxlength="255" onKeyUp="apt_validate();" /></p>
+	<p>Tag name: <input onkeypress="return apt_enter_submit(event);" style="min-width:50px;width:100%;" type="text" id="apt_box_tag_name" name="apt_box_tag_name" value="" maxlength="255" /><br />
+	Related words (separated by semicolons): <input onkeypress="return apt_enter_submit(event);" style="min-width:50px;width:100%;" type="text" id="apt_box_tag_related_words" name="apt_box_tag_related_words" value="" maxlength="255" /></p>
 
 	<p>
 		<input class="button-highlighted" type="button" id="apt_create_a_new_tag_ajax_button" value=" Create a new tag ">
 		<span id="apt_box_message" style="color:green;"></span>
 	</p>
-	</form>
 <?php
 }
 
@@ -250,6 +248,26 @@ jQuery(document).ready(function($) {
 		});
 	});
 });
+function apt_enter_submit(e) {
+    if (e.which == 13) {
+        var $targ = $(e.target);
+
+        if (!$targ.is("textarea") && !$targ.is(":button,:submit")) {
+            var focusNext = false;
+            $(this).find(":input:visible:not([disabled],[readonly]), a").each(function(){
+                if (this === e.target) {
+                    focusNext = true;
+                }
+                else if (focusNext){
+                    $(this).focus();
+                    return false;
+                }
+            });
+
+            return false;
+        }
+    }
+}
 </script>
 <?php
 }
@@ -258,18 +276,14 @@ function apt_settings_page_javascript() { //javascript calling function above
 ?>
 <script type="text/javascript">
 function apt_change_background(num){
-
-
-   if (document.getElementById("apt_taglist_checkbox_"+num).checked) {
-     document.getElementById("apt_taglist_tag_"+num).style.backgroundColor='#FFD2D2';
-     document.getElementById("apt_taglist_related_words_"+num).style.backgroundColor='#FFD2D2';
-   }
-   else {
-    document.getElementById("apt_taglist_tag_"+num).style.backgroundColor='';
-    document.getElementById("apt_taglist_related_words_"+num).style.backgroundColor='';
-   }
-
-
+	if (document.getElementById("apt_taglist_checkbox_"+num).checked){
+		document.getElementById("apt_taglist_tag_"+num).style.backgroundColor='#FFD2D2';
+		document.getElementById("apt_taglist_related_words_"+num).style.backgroundColor='#FFD2D2';
+	}
+	else{
+		document.getElementById("apt_taglist_tag_"+num).style.backgroundColor='';
+		document.getElementById("apt_taglist_related_words_"+num).style.backgroundColor='';
+	}
 }
 </script>
 <?php
@@ -329,8 +343,17 @@ function apt_install_plugin(){ //runs only after MANUAL activation!
 	add_option('apt_post_analysis_content', '1', '', 'no');
 	add_option('apt_post_analysis_excerpt', '0', '', 'no');
 	add_option('apt_handling_current_tags', '1', '', 'no');
+
+	add_option('apt_string_manipulation_convert_diacritic', '1', '', 'no');
+	add_option('apt_string_manipulation_lowercase', '1', '', 'no');
+	add_option('apt_string_manipulation_strip_tags', '1', '', 'no');
+	add_option('apt_string_manipulation_replace_whitespaces', '1', '', 'no');
+	add_option('apt_string_manipulation_replace_nonalphanumeric', '0', '', 'no');
+	add_option('apt_string_manipulation_ignore_asterisks', '1', '', 'no');
+
+	add_option('apt_word_recognition_separators', '.,?!:;\'"`/()[]{}_+=-<>~@#$%^&*', '', 'no');
+
 	add_option('apt_miscellaneous_tag_maximum', '20', '', 'no');
-	add_option('apt_miscellaneous_tagging_occasion', '1', '', 'yes'); //this is used on every page reload, so until I find a way to stop checking for this I need to cache it
 	add_option('apt_miscellaneous_wildcards', '0', '', 'no');
 }
 #################### update function ############################
@@ -338,12 +361,22 @@ function apt_update_plugin(){ //runs when all plugins are loaded (needs to be de
 	if(current_user_can('manage_options')){
 		if(get_option('apt_plugin_version') <> apt_get_plugin_version()){ //check if the saved version is not equal to the current version
 
-			/*
 			#### now comes everything what must be changed in the new version
-			if(get_option('apt_plugin_version') == '1.0'){ //upgrade to v1.1 from 1.0:
+			if(get_option('apt_plugin_version') == '1.1'){ //upgrade to v1.2 from 1.1:
+				delete_option('apt_miscellaneous_tagging_occasion');
+
+				add_option('apt_string_manipulation_convert_diacritic', '1', '', 'no');
+				add_option('apt_string_manipulation_lowercase', '1', '', 'no');
+				add_option('apt_string_manipulation_strip_tags', '1', '', 'no');
+				add_option('apt_string_manipulation_replace_whitespaces', '1', '', 'no');
+				add_option('apt_string_manipulation_replace_nonalphanumeric', '0', '', 'no');
+				add_option('apt_string_manipulation_ignore_asterisks', '1', '', 'no');
+
+				add_option('apt_word_recognition_separators', '.,?!:;\'"`/()[]{}_+=-<>~@#$%^&*', '', 'no');
 			}
+
+
 			#### -/changes
-			*/
 
 			update_option('apt_admin_notice_update', 1); //we want to show the admin notice after upgrading, right?
 			update_option('apt_plugin_version', apt_get_plugin_version(), '', 'no'); //update plugin version in DB
@@ -368,8 +401,17 @@ function apt_uninstall_plugin(){ //runs after uninstalling of the plugin
 	delete_option('apt_post_analysis_content');
 	delete_option('apt_post_analysis_excerpt');
 	delete_option('apt_handling_current_tags');
+
+	delete_option('apt_string_manipulation_lowercase');
+	delete_option('apt_string_manipulation_strip_tags');
+	delete_option('apt_string_manipulation_strip_tags');
+	delete_option('apt_string_manipulation_replace_whitespaces');
+	delete_option('apt_string_manipulation_replace_nonalphanumeric');
+	delete_option('apt_string_manipulation_ignore_asterisks');
+
+	delete_option('apt_word_recognition_separators');
+
 	delete_option('apt_miscellaneous_tag_maximum');
-	delete_option('apt_miscellaneous_tagging_occasion');
 	delete_option('apt_miscellaneous_wildcards');
 }
 
@@ -378,7 +420,9 @@ function apt_uninstall_plugin(){ //runs after uninstalling of the plugin
 #################################################################
 function apt_tagging_algorithm($post_id){ //this function is for adding tags to only one post - mass adding should be handled by using a loop
 	global $wpdb, $apt_table, $apt_wp_posts;
-	$apt_post_current_tag_count = count(wp_get_post_terms($post_id, 'post_tag', array("fields" => "names")));
+
+	$apt_post_current_tags = wp_get_post_terms($post_id, 'post_tag', array("fields" => "names"));
+	$apt_post_current_tag_count = count($apt_post_current_tags);
 	$apt_tag_maximum = get_option('apt_miscellaneous_tag_maximum');
 
 	#################################################################
@@ -425,6 +469,11 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 		$apt_post_title = $wpdb->get_var("SELECT post_title FROM $apt_wp_posts WHERE ID = $post_id LIMIT 0, 1");
 		$apt_post_content = $wpdb->get_var("SELECT post_content FROM $apt_wp_posts WHERE ID = $post_id LIMIT 0, 1");
 		$apt_post_excerpt = $wpdb->get_var("SELECT post_excerpt FROM $apt_wp_posts WHERE ID = $post_id LIMIT 0, 1");
+
+		$apt_word_separators = get_option('apt_word_recognition_separators');
+		$apt_word_separators_plus_space = ' '. $apt_word_separators; //add also a space to the separators
+		$apt_word_separators_array = str_split($apt_word_separators_plus_space);
+
 		$apt_post_analysis_haystack_string = '';
 
 		//we need to find out what should be searching for
@@ -440,29 +489,43 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 
 
 		//preparing the string for searching
-		setlocale(LC_ALL, 'en_GB'); //set locale
-		$apt_post_analysis_haystack_string = iconv('UTF-8', 'ASCII//TRANSLIT', $apt_post_analysis_haystack_string); //replace diacritic character with ascii equivalents
-		$apt_post_analysis_haystack_string = strtolower($apt_post_analysis_haystack_string); //make it lowercase
-		$apt_post_analysis_haystack_string = wp_strip_all_tags($apt_post_analysis_haystack_string); //remove HTML, PHP and JS tags
-		$apt_post_analysis_haystack_string = preg_replace("/[^a-zA-Z0-9\s]/", ' ', $apt_post_analysis_haystack_string); //replace all non-alphanumeric-characters with space
-		$apt_post_analysis_haystack_string = preg_replace(array('/\s{2,}/', '/[\t\n]/'), ' ', $apt_post_analysis_haystack_string); //replace whitespaces and newline characters with a space
-		$apt_post_analysis_haystack_string = ' '. $apt_post_analysis_haystack_string .' '; //we need to add a space before and after the string: the engine is looking for ' string ' (with space at the beginning and the end, so it won't find e.g. ' ice ' in a word ' iceman ')
+		if(get_option('apt_string_manipulation_convert_diacritic') == 1){
+			setlocale(LC_ALL, 'en_GB'); //set locale
+			$apt_post_analysis_haystack_string = iconv('UTF-8', 'ASCII//TRANSLIT', $apt_post_analysis_haystack_string); //replace diacritic character with ascii equivalents
+		}
+		if(get_option('apt_string_manipulation_lowercase') == 1){
+			$apt_post_analysis_haystack_string = strtolower($apt_post_analysis_haystack_string); //make it lowercase
+		}
+		if(get_option('apt_string_manipulation_strip_tags') == 1){
+			$apt_post_analysis_haystack_string = wp_strip_all_tags($apt_post_analysis_haystack_string); //remove HTML, PHP and JS tags
+		}
+		if(get_option('apt_string_manipulation_replace_nonalphanumeric') == 1){
+			$apt_post_analysis_haystack_string = preg_replace("/[^a-zA-Z0-9\s]/", ' ', $apt_post_analysis_haystack_string); //replace all non-alphanumeric-characters with space
+		}
+		if(get_option('apt_string_manipulation_replace_whitespaces') == 1){
+			$apt_post_analysis_haystack_string = preg_replace(array('/\s{2,}/', '/[\t\n]/'), ' ', $apt_post_analysis_haystack_string); //replace whitespaces and newline characters with a space
+		}
 
+		$apt_post_analysis_haystack_string = ' '. $apt_post_analysis_haystack_string .' '; //we need to add a space before and after the string: the engine is looking for ' string ' (with space at the beginning and the end, so it won't find e.g. ' ice ' in a word ' iceman ')
 
 		$apt_tags_to_add_array = array(); //array of tags that will be added to a post
 		$apt_table_rows_tag_related_words = mysql_query("SELECT tag,related_words FROM $apt_table");
 		$apt_table_related_words = mysql_query("SELECT related_words FROM $apt_table");
 
+		//determine if we should calculate the number of max. tags for a post - only when appending tags
 		if(get_option('apt_handling_current_tags') == 1){
 			$apt_tags_to_add_max = $apt_tag_maximum - $apt_post_current_tag_count;
 		}
-		if(get_option('apt_handling_current_tags') == 2 OR 3){
+		else{
 			$apt_tags_to_add_max = $apt_tag_maximum;
 		}
 
-//die($apt_post_analysis_haystack_string); //debug
+//die(htmlspecialchars($apt_post_analysis_haystack_string)); //for debugging
 
+		## SEARCH FOR A SINGLE TAG AND ITS RELATED WORDS
 		while($apt_table_cell = mysql_fetch_array($apt_table_rows_tag_related_words, MYSQL_NUM)){ //loop handling every row in the table
+
+			## CHECK FOR RELATED WORDS
 			$apt_table_row_related_words_count = substr_count($apt_table_cell[1], ';') + 1; //variable prints number of related words in the current row that is being "browsed" by the while; must be +1 higher than the number of semicolons!
 
 			//resetting variables - this must be here or the plugin will add non-relevant tags 
@@ -470,44 +533,145 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 			$apt_table_related_word_found = 0;
 
 			if(!empty($apt_table_cell[1])){ //if there are not any related words, do not perform this action so the tag won't be added (adds tag always when no related words are assigned to it)
+
+				$apt_table_cell_substrings = explode(';', $apt_table_cell[1], $apt_table_row_related_words_count);
 				for($i=0; $i < $apt_table_row_related_words_count; $i++){ //loop handling substrings in the 'related_words' column - $i must be 0 because array always begin with 0!
-					$apt_table_cell_substrings = explode(';', $apt_table_cell[1], $apt_table_row_related_words_count);
 
-					//trimming the substring - it no multiple whitespace characters etc. are removed
-					$apt_substring_needle = ' '. preg_replace("/[^a-zA-Z0-9\s]/", ' ', strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $apt_table_cell_substrings[$i]))) .' ';
-					$apt_substring_needle_wildcards = '/'. str_replace('*', '([a-zA-Z0-9]*)', $apt_substring_needle) .'/';
-
-
-					//wildcard search for related words
-					if(get_option('apt_miscellaneous_wildcards') == 1){ //run if wildcards are allowed
-						if(preg_match($apt_substring_needle_wildcards, $apt_post_analysis_haystack_string)){
-							$apt_table_related_word_found = 1; //set variable to 1
+					//preparing the substring needle for search --- note: removing tags here does not make any sense!
+					$apt_substring_needle = $apt_table_cell_substrings[$i];
+					if(get_option('apt_string_manipulation_convert_diacritic') == 1){
+						setlocale(LC_ALL, 'en_GB'); //set locale
+						$apt_substring_needle = iconv('UTF-8', 'ASCII//TRANSLIT', $apt_substring_needle); //replace diacritic character with ascii equivalents
+					}
+					if(get_option('apt_string_manipulation_lowercase') == 1){
+						$apt_substring_needle = strtolower($apt_substring_needle); //make it lowercase
+					}
+					if(get_option('apt_string_manipulation_replace_nonalphanumeric') == 1){
+						if(get_option('apt_string_manipulation_ignore_asterisks') == 1){ //ignore asterisks so wildcards will work
+							$apt_substring_needle = preg_replace("/[^a-zA-Z0-9\s\*]/", ' ', $apt_substring_needle); //replace all non-alphanumeric-characters with space
+						}
+						else{ //wildcards won't work
+							$apt_substring_needle = preg_replace("/[^a-zA-Z0-9\s]/", ' ', $apt_substring_needle); //replace all non-alphanumeric-characters with space
 						}
 					}
-					else{ //if wildcards are not allowed, continue searching without using a regular expression
-						if(strstr($apt_post_analysis_haystack_string, $apt_substring_needle)){ //strtolowered and asciied ' substring ' has been found
-							$apt_table_related_word_found = 1; //set variable to 1
+
+					## WORD SEPARATORS FOR SUBSTRINGS
+					if(!empty($apt_word_separators)){ //continue only if separators are set
+						foreach($apt_word_separators_array as $separator){
+							foreach($apt_word_separators_array as $separator_end){
+
+								$apt_substring_needle_separated = $separator . $apt_substring_needle . $separator_end; //add each separator to the string
+
+								//wildcard search for related words
+								if(get_option('apt_miscellaneous_wildcards') == 1){ //run if wildcards are allowed
+									$apt_substring_needle_wildcards = '/'. str_replace('*', '([a-zA-Z0-9]*)', $apt_substring_needle) .'/';
+									if(preg_match($apt_substring_needle_wildcards, $apt_post_analysis_haystack_string)){
+										$apt_table_related_word_found = 1; //set variable to 1
+										break 2; //stop the loops if the tag was found, no need to continue
+									}
+								}
+								else{ //if wildcards are not allowed, continue searching without using a regular expression
+									if(strstr($apt_post_analysis_haystack_string, $apt_substring_needle)){ //strtolowered and asciied 'XsubstringX' has been found
+										$apt_table_related_word_found = 1; //set variable to 1
+										break 2; //stop the loops if the tag was found, no need to continue
+									}
+								}//-else wildcard check
+
+							}//-foreach for the second deparator - end
+						}//-foreach for the first deparator - end
+					}//-if separators are set
+					## SPACE SEPARATORS FOR SUBSTRINGS
+					else{ //if no separators are set, continue searching with spaces before and after every tag
+						$apt_substring_needle_spaces = ' '. $apt_substring_needle .' '; //add separators - spaces
+
+						//wildcard search for related words
+						if(get_option('apt_miscellaneous_wildcards') == 1){ //run if wildcards are allowed
+							$apt_substring_needle_wildcards = '/'. str_replace('*', '([a-zA-Z0-9]*)', $apt_substring_needle_spaces) .'/';
+
+							if(preg_match($apt_substring_needle_wildcards, $apt_post_analysis_haystack_string)){
+								$apt_table_related_word_found = 1; //set variable to 1
+							}
 						}
-					}//-if wildcard check
+						else{ //if wildcards are not allowed, continue searching without using a regular expression
+							if(strstr($apt_post_analysis_haystack_string, $apt_substring_needle_spaces)){ //strtolowered and asciied ' substring ' has been found
+								$apt_table_related_word_found = 1; //set variable to 1
+							}
+						}//-if wildcard check
+					}//-else - no separators
 				}//-for
 			}//-if for related words check
 
+//die("found: ".$apt_table_related_word_found ."<br>text: ". htmlspecialchars($apt_post_analysis_haystack_string) . "<br>needle: ". htmlspecialchars($apt_substring_needle) .""); //for debugging
 
-			//trimming the tag - it no multiple whitespace characters etc. are removed
-			$apt_tag_needle = ' '. preg_replace("/[^a-zA-Z0-9\s]/", ' ', strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $apt_table_cell[0]))) .' ';
 
-			//searching for tags (note for future me-dumbass: we do not want to check for wildcards, they cannot be used in tags, moron!
-			if($apt_table_related_word_found == 0){ //do not continue searching if the related word has been found
-				if(strstr($apt_post_analysis_haystack_string, $apt_tag_needle)){ //strtolowered and asciied ' tag ' has been found
-					$apt_table_tag_found = 1; //set variable to 1
+			## CHECK FOR TAGS
+			if($apt_table_related_word_found == 0){ //search for tags only when no substrings were found
+//die("no substring was found, now we search for tags"); //for debugging
+				//preparing the needle for search --- note: removing tags and whitespace characters here does not make any sense!
+				$apt_tag_needle = $apt_table_cell[0];
+				if(get_option('apt_string_manipulation_convert_diacritic') == 1){
+					setlocale(LC_ALL, 'en_GB'); //set locale
+					$apt_tag_needle = iconv('UTF-8', 'ASCII//TRANSLIT', $apt_tag_needle); //replace diacritic character with ascii equivalents
 				}
-			}//-if related word not found
+				if(get_option('apt_string_manipulation_lowercase') == 1){
+					$apt_tag_needle = strtolower($apt_tag_needle); //make it lowercase
+				}
+				if(get_option('apt_string_manipulation_replace_nonalphanumeric') == 1){
+					$apt_tag_needle = preg_replace("/[^a-zA-Z0-9\s]/", ' ', $apt_tag_needle); //replace all non-alphanumeric-characters with space //TODO: this should be removed whrn word separators are available
+				}
 
-			//adding tags to the array
+				## WORD SEPARATORS FOR TAGS
+				if(!empty($apt_word_separators)){ //continue only if separators are set
+					foreach($apt_word_separators_array as $separator){
+						foreach($apt_word_separators_array as $separator_end){
+
+							$apt_tag_needle_separated = $separator . $apt_tag_needle . $separator_end; //add each separator to the string
+
+							//searching for tags (note for future me: we do not want to check for wildcards, they cannot be used in tags (don't implement it AGAIN, you moron)!
+							if(strstr($apt_post_analysis_haystack_string, $apt_tag_needle_separated)){ //strtolowered and asciied 'XtagX' has been found
+//die("tag '". $apt_tag_needle ."' found with separators '". $separator ."' and '". $separator_end ."'"); //for debugging
+								$apt_table_tag_found = 1; //set variable to 1
+								break 2; //stop the loops if the tag was found, no need to continue
+							}
+						}//-foreach for the second deparator - end
+					}//-foreach for the first deparator - end
+				}//-if separators are set
+				## SPACE SEPARATORS FOR TAGS
+				else{ //if no separators are set, continue searching with spaces before and after every tag
+					$apt_tag_needle_spaces = ' '. $apt_tag_needle .' ';
+
+					//searching for tags (note for future me: we do not want to check for wildcards, they cannot be used in tags (don't implement it AGAIN, you moron)!
+					if(strstr($apt_post_analysis_haystack_string, $apt_tag_needle_spaces)){ //strtolowered and asciied ' tag ' has been found
+						$apt_table_tag_found = 1; //set variable to 1
+//die("tag found without separators"); //for debugging
+					}
+				}//-else - no separators
+			}//-check for tags if no substrings were found
+
+
+//die("tag: ". htmlspecialchars($apt_table_cell[0]) ."<br>needle: ". htmlspecialchars($apt_tag_needle)); //for debugging
+
+			## ADDING TAGS TO ARRAY
 			if($apt_table_related_word_found == 1 OR $apt_table_tag_found == 1){ //tag or one of related_words has been found, add tag to array!
-					array_push($apt_tags_to_add_array, $apt_table_cell[0]); //add tag to the array
-					update_option('apt_stats_assigned_tags', get_option('apt_stats_assigned_tags') + 1); //add 1 for every tag added to a post
+//die("tag: ". htmlspecialchars($apt_table_cell[0]) ."<br>rw found: ".$apt_table_related_word_found ."<br> tag found: ".  $apt_table_tag_found); //for debugging
+
+				//we need to check if the tag isn't already in the array of the current tags (don't worry about the temporary array for adding tags, only unique values are pushed in)	
+				if(get_option('apt_handling_current_tags') == 2 OR $apt_post_current_tag_count == 0){ //if we need to replace tags, don't check for the current tags or they won't be added again after deleting the old ones --- $apt_post_current_tag_count == 0 will work also for the "do nothing" option
+						array_push($apt_tags_to_add_array, $apt_table_cell[0]); //add tag to the array
+						update_option('apt_stats_assigned_tags', get_option('apt_stats_assigned_tags') + 1); //add 1 for every tag added to a post
+
+//die("tag:". htmlspecialchars($apt_table_cell[0]) ."<br>current tags: ". htmlspecialchars(print_r($apt_tags_to_add_array, true))); //for debugging
+				}
+				else{//appending tags? check for current tags to avoid adding duplicate records to the array
+					if(in_array($apt_table_cell[0], $apt_post_current_tags) == FALSE){
+						array_push($apt_tags_to_add_array, $apt_table_cell[0]); //add tag to the array
+						update_option('apt_stats_assigned_tags', get_option('apt_stats_assigned_tags') + 1); //add 1 for every tag added to a post
+					}
+				}
+
+
 			}//--if for pushing tag to array
+//die("tag needle:". htmlspecialchars($apt_tag_needle) ."<br>rw needle: ". htmlspecialchars($apt_substring_needle) ."<br>rw found: ". $apt_table_related_word_found."<br>tag found: " .$apt_table_tag_found); //for debugging
 
 
 			if(count($apt_tags_to_add_array) == $apt_tags_to_add_max){//check if the array is equal to the max. number of tags per one post, break the loop
@@ -515,24 +679,18 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 			}
 		}//-while
 
+//die("max: ".$apt_tag_maximum ."<br>current tags: ". $apt_post_current_tag_count . "<br>max for this post: " .$apt_tags_to_add_max. "<br>current tags: ". htmlspecialchars(print_r($apt_tags_to_add_array, true))); //for debugging
 
+		## ADDING TAGS TO THE POST
 		//if the post has already tags, we should decide what to do with them
-		if(get_option('apt_handling_current_tags') == 1 OR 3){
+		if(get_option('apt_handling_current_tags') == 1 OR get_option('apt_handling_current_tags') == 3){
 			wp_set_post_terms($post_id, $apt_tags_to_add_array, 'post_tag', true); //append tags
-
 		}
-		if(get_option('apt_handling_current_tags') == 2 AND (count($apt_tags_to_add_array) != 0)){ //if the plugin generated some tags, replace the old ones,otherwise do not continue!
+		if(get_option('apt_handling_current_tags') == 2 AND count($apt_tags_to_add_array) != 0){ //if the plugin generated some tags, replace the old ones,otherwise do not continue!
 			wp_set_post_terms($post_id, $apt_tags_to_add_array, 'post_tag', false); //replace tags
-
-			/*
-			//alternative way of deleting current tags
-			$apt_delete_tags_from_post = mysql_query("SELECT * FROM ". $wpdb->prefix ."term_relationships tr JOIN ". $wpdb->prefix ."term_taxonomy tt ON tr.term_taxonomy_id=tt.term_taxonomy_id WHERE tr.object_id='$post_id' AND tt.taxonomy='post_tag'");
-			while ($arr = mysql_fetch_array($apt_delete_tags_from_post)){
-				mysql_query("DELETE FROM ".$wpdb->prefix."term_relationships WHERE term_taxonomy_id='". $arr['term_taxonomy_id'] ."'");
-			}
-			wp_set_post_terms($post_id, $apt_tags_to_add_array, 'post_tag', true); //append tags
-			*/
 		}
+
+//die("current tags: ". htmlspecialchars(print_r($apt_post_current_tags, true)) . "<br>array to add: ". htmlspecialchars(print_r($apt_tags_to_add_array, true))); //for debugging
 
 	}//- revision check
 }//-end of tagging function
@@ -568,13 +726,9 @@ if(is_admin()){ //these functions will be executed only if the admin panel is be
 
 }//-is_admin
 
-//executes after every page reload!!
-if(get_option('apt_miscellaneous_tagging_occasion') == 1){ //trigger tagging when publishing the post
-	add_action('publish_post','apt_tagging_algorithm', 25); //lower priority (default 10), accepted args = 1
-}
-if(get_option('apt_miscellaneous_tagging_occasion') == 2){ //trigger tagging when saving the post
-	add_action('save_post','apt_tagging_algorithm', 25);//lower priority (default 10), accepted args = 1
-}
+
+add_action('publish_post','apt_tagging_algorithm'); //executes after every page reload!!
+//add_action('save_post','apt_tagging_algorithm'); //for debugging
 
 #################################################################
 ########################## OPTIONS PAGE #########################
@@ -597,8 +751,17 @@ if(isset($_POST['apt_save_settings_button'])){ //saving all form data
 	update_option('apt_post_analysis_content', (isset($_POST['apt_post_analysis_content'])) ? '1' : '0');
 	update_option('apt_post_analysis_excerpt', (isset($_POST['apt_post_analysis_excerpt'])) ? '1' : '0');
 	update_option('apt_handling_current_tags', $_POST['apt_handling_current_tags']);
+
+	update_option('apt_string_manipulation_convert_diacritic', (isset($_POST['apt_string_manipulation_convert_diacritic'])) ? '1' : '0');
+	update_option('apt_string_manipulation_lowercase', (isset($_POST['apt_string_manipulation_lowercase'])) ? '1' : '0');
+	update_option('apt_string_manipulation_strip_tags', (isset($_POST['apt_string_manipulation_strip_tags'])) ? '1' : '0');
+	update_option('apt_string_manipulation_replace_whitespaces', (isset($_POST['apt_string_manipulation_replace_whitespaces'])) ? '1' : '0');
+	update_option('apt_string_manipulation_replace_nonalphanumeric', (isset($_POST['apt_string_manipulation_replace_nonalphanumeric'])) ? '1' : '0');
+	update_option('apt_string_manipulation_ignore_asterisks', (isset($_POST['apt_string_manipulation_ignore_asterisks'])) ? '1' : '0');
+
+	update_option('apt_word_recognition_separators', stripslashes(html_entity_decode($_POST['apt_word_recognition_separators'], ENT_QUOTES)));
+
 	update_option('apt_miscellaneous_wildcards', (isset($_POST['apt_miscellaneous_wildcards'])) ? '1' : '0');
-	update_option('apt_miscellaneous_tagging_occasion', $_POST['apt_miscellaneous_tagging_occasion']);
 
 	//making sure that people won't save rubbish in the DB
 	if(is_numeric($_POST['apt_miscellaneous_tag_maximum'])){
@@ -607,6 +770,15 @@ if(isset($_POST['apt_save_settings_button'])){ //saving all form data
 	else{
 		echo '<div id="message" class="error"><p><b>Error:</b> The option "apt_miscellaneous_tag_maximum" couldn\'t be saved because the sent value wasn\'t numeric.</p></div>'; //user-moron scenario
 	}
+	//print message informing the user about better performance if they delete separators
+	if(isset($_POST['apt_string_manipulation_replace_nonalphanumeric']) AND get_option('apt_word_recognition_separators') != ''){ //display this note only if there are not any separators
+		echo '<div id="message" class="updated"><p><b>Note:</b> Replacing non-alphanumeric characters with spaces has been activated. <b>Deleting all user-defined word separators</b> is recommended for better performance.</p></div>'; //user-moron scenario
+	}
+	//print message informing the user about non functioning wildcards
+	if(isset($_POST['apt_string_manipulation_replace_nonalphanumeric']) AND get_option('apt_string_manipulation_ignore_asterisks') == 0){  //display this note only if asterisk are not being ignored
+		echo '<div id="message" class="updated"><p><b>Note:</b> Non-alphanumeric characters (including asterisks) will be replaced with spaces. <b>Wildcards won\'t work</b> unless you allow the option "Don\'t replace asterisks".</p></div>'; //user-moron scenario
+	}
+
 
 	echo '<div id="message" class="updated"><p>Your settings have been saved.</p></div>'; //confirm message
 }
@@ -632,7 +804,7 @@ if(isset($_POST['apt_delete_all_tags_button'])){ //delete all records from $apt_
 }
 
 if(isset($_POST['apt_delete_chosen_tags_button'])){ //delete chosen records from $apt_table
-	if(array_key_exists('apt_taglist_checkbox_', $_POST)){ //determine if any checkbox was checked
+	if(isset($_POST['apt_taglist_checkbox_'])){ //determine if any checkbox was checked
 		foreach($_POST['apt_taglist_checkbox_'] as $id => $value){ //loop for handling checkboxes
 			mysql_query("DELETE FROM $apt_table WHERE id=$id");
 		}
@@ -646,7 +818,6 @@ if(isset($_POST['apt_delete_chosen_tags_button'])){ //delete chosen records from
 }
 
 if(isset($_POST['apt_save_tags_button'])){ //saving changed tags
-
 	foreach($_POST['apt_taglist_tag_'] as $id => $value){ //saving tag
 		$apt_saved_tag = trim($_POST['apt_taglist_tag_'][$id]);
 
@@ -875,7 +1046,7 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 			<div class="postbox">
 				<h3>Show some love!</h3>
 				<div class="inside">
-					<p>If you find this plugin useful, please consider donating. Every donation, no matter how small, is appreciated. Your support helps cover the costs associated with development of this free software.</p>
+					<p>If you find this plugin useful, please consider donating. Every donation, no matter how small, is appreciated. Your support helps cover the <acronym title="webhosting fees etc.">costs</acronym> associated with development of this <em>free</em> software.</p>
 
 					<ul>
 					<li><a class="apt_sidebar_link apt_donate" href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=T2QUJ4R6JHKNG">Donate with PayPal</a></li>
@@ -887,7 +1058,6 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 					<li><a class="apt_sidebar_link apt_rate" href="http://wordpress.org/extend/plugins/automatic-post-tagger">Rate plugin at WordPress.org</a></li>
 					<li><a class="apt_sidebar_link apt_wp_new_post" href="<?php echo admin_url('post-new.php'); ?>">Review this plugin on your blog</a></li>
 					<li><a class="apt_sidebar_link apt_twitter" href="http://twitter.com/home?status=Automatic Post Tagger - useful WordPress plugin that automatically adds user-defined tags to posts and pages. http://wordpress.org/extend/plugins/automatic-post-tagger">Post a link to Twitter</a></li>
-					<li><a class="apt_sidebar_link apt_facebook" href="http://www.facebook.com/sharer.php?u=http://wordpress.org/extend/plugins/automatic-post-tagger&amp;t=Automatic Post Tagger%20-%20useful%20WordPress%20plugin%20that%20automatically%20adds%20user-defined%20tags%20to%20posts%20and%20pages%20.">Post a link to Facebook</a></li>
 
 					</ul>
 
@@ -932,15 +1102,26 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 							<input type="radio" name="apt_handling_current_tags" id="apt_handling_current_tags_3" value="3" <?php if(get_option('apt_handling_current_tags') == 3) echo 'checked="checked"'; ?>> <label for="apt_handling_current_tags_3">Do nothing</label>
 						</p>
 						<p>
+							<b>String manipulation</b><br />
+							<small>How should the searching algorithm behave?</small><br />
+							<input type="checkbox" name="apt_string_manipulation_convert_diacritic" id="apt_string_manipulation_convert_diacritic" <?php if(get_option('apt_string_manipulation_convert_diacritic') == 1) echo 'checked="checked"'; ?>> <label for="apt_string_manipulation_convert_diacritic">Convert Latin diacritic characters to their ASCII equivalents (required if your language isn't English)</label><br />
+							<input type="checkbox" name="apt_string_manipulation_lowercase" id="apt_string_manipulation_lowercase" <?php if(get_option('apt_string_manipulation_lowercase') == 1) echo 'checked="checked"'; ?>> <label for="apt_string_manipulation_lowercase">Lowercase strings to ignore the case sensitivity</label><br />
+							<input type="checkbox" name="apt_string_manipulation_strip_tags" id="apt_string_manipulation_strip_tags" <?php if(get_option('apt_string_manipulation_strip_tags') == 1) echo 'checked="checked"'; ?>> <label for="apt_string_manipulation_strip_tags">Strip PHP/HTML tags from analysed content</label><br />
+							<input type="checkbox" name="apt_string_manipulation_replace_whitespaces" id="apt_string_manipulation_replace_whitespaces" <?php if(get_option('apt_string_manipulation_replace_whitespaces') == 1) echo 'checked="checked"'; ?>> <label for="apt_string_manipulation_replace_whitespaces">Replace (multiple) whitespace characters with spaces (and treat them as separators)</label><br />
+							<input type="checkbox" name="apt_string_manipulation_replace_nonalphanumeric" id="apt_string_manipulation_replace_nonalphanumeric" <?php if(get_option('apt_string_manipulation_replace_nonalphanumeric') == 1) echo 'checked="checked"'; ?>> <label for="apt_string_manipulation_replace_nonalphanumeric">Replace non-alphanumeric characters with spaces (and treat them as separators)</label><br />
+							<span style="margin-left: 18px;"><small>(If enabled, deleting user-defined word separators is recommended for better performance.)</small></span><br />
+							<span style="margin-left: 18px;"><input type="checkbox" name="apt_string_manipulation_ignore_asterisks" id="apt_string_manipulation_ignore_asterisks" <?php if(get_option('apt_string_manipulation_ignore_asterisks') == 1) echo 'checked="checked"'; ?>> <label for="apt_string_manipulation_ignore_asterisks">Don't replace asterisks</label>
+						</p>
+						<p>
+							<b>Word recognition</b><br />
+							<small>How should APT recognize words?</small><br />
+							<label for="apt_word_recognition_separators">Word separators:</label> <input type="text" name="apt_word_recognition_separators" id="apt_word_recognition_separators" value="<?php echo htmlentities(get_option('apt_word_recognition_separators'), ENT_QUOTES); ?>" maxlength="255" size="25"> <small>(spaces are already treated as separators by default)</small><br />
+						</p>
+						<p>
 							<b>Miscellaneous</b><br />
-							<label for="apt_miscellaneous_tag_maximum">Maximum number of tags per one post:</label> <input type="text" name="apt_miscellaneous_tag_maximum" id="apt_miscellaneous_tag_maximum" value="<?php echo get_option('apt_miscellaneous_tag_maximum'); ?>" maxlength="10" size="3"><br />
-							Run tagging algorithm after a post is 
-								<select size="1" name="apt_miscellaneous_tagging_occasion">
-									<option value="1" <?php if(get_option('apt_miscellaneous_tagging_occasion') == 1){ echo ' selected="selected"'; } ?>>published/updated</option>
-									<option value="2" <?php if(get_option('apt_miscellaneous_tagging_occasion') == 2){ echo ' selected="selected"'; } ?> onClick="alert('Warning: The tagging algorithm will run after every manual and automatic saving of a post!')">saved</option>
-								</select>.<br />
-							<input type="checkbox" name="apt_miscellaneous_wildcards" id="apt_miscellaneous_wildcards" <?php if(get_option('apt_miscellaneous_wildcards') == 1) echo 'checked="checked"'; ?>> <label for="apt_miscellaneous_wildcards">Use wildcard (*) to substistute any aplhanumeric characters in related words</label><br />
-							<small>(Example: pattern "cat*" will match words "cats" and "category", pattern "c*t" will match "cat" and "colt".)</small></label>
+							<label for="apt_miscellaneous_tag_maximum">Maximum number of tags per post:</label> <input type="text" name="apt_miscellaneous_tag_maximum" id="apt_miscellaneous_tag_maximum" value="<?php echo get_option('apt_miscellaneous_tag_maximum'); ?>" maxlength="10" size="3"><br />
+							<input type="checkbox" name="apt_miscellaneous_wildcards" id="apt_miscellaneous_wildcards" <?php if(get_option('apt_miscellaneous_wildcards') == 1) echo 'checked="checked"'; ?>> <label for="apt_miscellaneous_wildcards">Use the wildcard (*) to substistute any aplhanumeric characters in related words</label><br />
+							<span style="margin-left: 18px;"><small>(Example: pattern "cat*" will match words "cats" and "category", pattern "c*t" will match "cat" and "colt".)</small></span>
 						</p>
 						
 						<p style="margin-top:20px;">
