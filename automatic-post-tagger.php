@@ -3,7 +3,7 @@
 Plugin Name: Automatic Post Tagger
 Plugin URI: http://wordpress.org/extend/plugins/automatic-post-tagger
 Description: This plugin automatically adds user-defined tags to posts.
-Version: 1.2
+Version: 1.3
 Author: Devtard
 Author URI: http://devtard.com
 License: GPLv2 or later
@@ -77,7 +77,7 @@ function apt_plugin_meta_links($links, $file){
 	if($file == $apt_plugin_basename){
 		$links[] = '<a href="http://wordpress.org/extend/plugins/automatic-post-tagger/faq">FAQ</a>';
 		$links[] = '<a href="http://wordpress.org/support/plugin/automatic-post-tagger">Support</a>';
-		$links[] = '<a href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=T2QUJ4R6JHKNG">Donate</a>';
+		//$links[] = '<a href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=T2QUJ4R6JHKNG">Donate</a>';
 	}
 	return $links;
 }
@@ -99,14 +99,15 @@ function apt_plugin_admin_notices(){
 		}
 		if(isset($_GET['n']) AND $_GET['n'] == 2){
 			update_option('apt_admin_notice_update', 0); //hide update notice
-			echo '<div id="message" class="updated"><p><b>New features in version '. get_option('apt_plugin_version') .':</b> Customizable word separators and more control over the searching process.</p></div>'; //show new functions
+			echo '<div id="message" class="updated"><p><b>New feature:</b> You can choose to analyse only a specific part of the content (Miscellaneous).</p></div>'; //show new functions
+			echo '<div id="message" class="updated"><p>Please <a href="http://wordpress.org/extend/plugins/automatic-post-tagger">rate this plugin</a>. If you give it <b>5 stars</b> the developer will be motivated to work faster on implementing new features!</p></div>'; //gimme some stars!
 		}
 		if(isset($_GET['n']) AND $_GET['n'] == 3){
 			update_option('apt_admin_notice_donate', 0); //hide donation notice
 		}
 		if(isset($_GET['n']) AND $_GET['n'] == 4){
 			update_option('apt_admin_notice_donate', 0); //hide donation notice and display another notice (below)
-			echo '<div id="message" class="updated"><p><b>Thank you for donating.</b> If you filled in the URL of your website, it should appear on the list of recent contributors in the next 48 hours.</p></div>'; //show "thank you" message
+			echo '<div id="message" class="updated"><p><b>Thank you for donating.</b> If you filled in the URL of your website, it should appear on the list of recent contributors ASAP.</p></div>'; //show "thank you" message
 		}
 
 
@@ -115,11 +116,13 @@ function apt_plugin_admin_notices(){
 			echo '<div id="message" class="updated"><p><b>Automatic Post Tagger</b> has been installed. <a href="'. admin_url('options-general.php?page=automatic-post-tagger&n=1') .'">Set up the plugin &raquo;</a></p></div>';
 		}
 		if(get_option('apt_admin_notice_update') == 1){ //show link to the setting page after updating
-			echo '<div id="message" class="updated"><p><b>Automatic Post Tagger</b> has been updated. <a href="'. admin_url('options-general.php?page=automatic-post-tagger&n=2') .'">Find out what\'s new &raquo;</a></p></div>';
+			echo '<div id="message" class="updated"><p><b>Automatic Post Tagger</b> has been updated to version <b>'. get_option('apt_plugin_version') .'</b>. <a href="'. admin_url('options-general.php?page=automatic-post-tagger&n=2') .'">Find out what\'s new &raquo;</a></p></div>';
 		}
-
+/*
 		if(get_option('apt_admin_notice_donate') == 1){ //determine if the donation notice was not dismissed
 			if(((time() - get_option('apt_stats_install_date')) >= 2629743) AND (get_option('apt_stats_assigned_tags') >= 50)){ //show donation notice after a month (2629743 seconds) and if the plugin added more than 50 tags
+//TODO: there should be a check for time so it won't print "over a month" after a year!
+
 				echo '<div id="message" class="updated"><p>
 					<b>Thanks for using <acronym title="Automatic Post Tagger">APT</acronym>!</b> You installed this plugin over a month ago. Since that time it has assigned <b>'. get_option('apt_stats_assigned_tags') .' tags</b> to your posts.
 					If you are satisfied with the results, isn\'t it worth at least a few dollars? Donations motivate the developer to continue working on this plugin. <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=T2QUJ4R6JHKNG" title="Donate with Paypal"><b>Sure, no problem!</b></a>
@@ -131,6 +134,7 @@ function apt_plugin_admin_notices(){
 				</p></div>';
 			}
 		}//-if donations
+*/
 	}//-if admin check
 }
 #################################################################
@@ -354,6 +358,9 @@ function apt_install_plugin(){ //runs only after MANUAL activation!
 	add_option('apt_word_recognition_separators', '.,?!:;\'"`/()[]{}_+=-<>~@#$%^&*', '', 'no');
 
 	add_option('apt_miscellaneous_tag_maximum', '20', '', 'no');
+	add_option('apt_miscellaneous_substring_analysis', '0', '', 'no');
+	add_option('apt_miscellaneous_substring_analysis_length', '1000', '', 'no');
+	add_option('apt_miscellaneous_substring_analysis_start', '0', '', 'no');
 	add_option('apt_miscellaneous_wildcards', '0', '', 'no');
 }
 #################### update function ############################
@@ -361,8 +368,10 @@ function apt_update_plugin(){ //runs when all plugins are loaded (needs to be de
 	if(current_user_can('manage_options')){
 		if(get_option('apt_plugin_version') <> apt_get_plugin_version()){ //check if the saved version is not equal to the current version
 
+			$apt_current_version = apt_get_plugin_version();
+
 			#### now comes everything what must be changed in the new version
-			if(get_option('apt_plugin_version') == '1.1'){ //upgrade to v1.2 from 1.1:
+			if(get_option('apt_plugin_version') == '1.1' AND $apt_current_version == '1.2'){ //upgrade from 1.1
 				delete_option('apt_miscellaneous_tagging_occasion');
 
 				add_option('apt_string_manipulation_convert_diacritic', '1', '', 'no');
@@ -373,15 +382,26 @@ function apt_update_plugin(){ //runs when all plugins are loaded (needs to be de
 				add_option('apt_string_manipulation_ignore_asterisks', '1', '', 'no');
 
 				add_option('apt_word_recognition_separators', '.,?!:;\'"`/()[]{}_+=-<>~@#$%^&*', '', 'no');
+
+				add_option('apt_miscellaneous_substring_analysis', '0', '', 'no');
+				add_option('apt_miscellaneous_substring_analysis_length', '1000', '', 'no');
+				add_option('apt_miscellaneous_substring_analysis_start', '0', '', 'no');
+			}
+			if(get_option('apt_plugin_version') == '1.2' AND $apt_current_version == '1.3'){ //upgrade from 1.1
+				add_option('apt_miscellaneous_substring_analysis', '0', '', 'no');
+				add_option('apt_miscellaneous_substring_analysis_length', '1000', '', 'no');
+				add_option('apt_miscellaneous_substring_analysis_start', '0', '', 'no');
 			}
 
+
+			## we must not forget to include new changes to conditions for all previous versions
 
 			#### -/changes
 
 			update_option('apt_admin_notice_update', 1); //we want to show the admin notice after upgrading, right?
-			update_option('apt_plugin_version', apt_get_plugin_version(), '', 'no'); //update plugin version in DB
-		}
-	}
+			update_option('apt_plugin_version', $apt_current_version); //update plugin version in DB
+		}//-if different versions
+	}//if current user can
 }
 #################### uninstall function #########################
 function apt_uninstall_plugin(){ //runs after uninstalling of the plugin
@@ -402,8 +422,8 @@ function apt_uninstall_plugin(){ //runs after uninstalling of the plugin
 	delete_option('apt_post_analysis_excerpt');
 	delete_option('apt_handling_current_tags');
 
+	delete_option('apt_string_manipulation_convert_diacritic');
 	delete_option('apt_string_manipulation_lowercase');
-	delete_option('apt_string_manipulation_strip_tags');
 	delete_option('apt_string_manipulation_strip_tags');
 	delete_option('apt_string_manipulation_replace_whitespaces');
 	delete_option('apt_string_manipulation_replace_nonalphanumeric');
@@ -412,6 +432,9 @@ function apt_uninstall_plugin(){ //runs after uninstalling of the plugin
 	delete_option('apt_word_recognition_separators');
 
 	delete_option('apt_miscellaneous_tag_maximum');
+	delete_option('apt_miscellaneous_substring_analysis');
+	delete_option('apt_miscellaneous_substring_analysis_length');
+	delete_option('apt_miscellaneous_substring_analysis_start');
 	delete_option('apt_miscellaneous_wildcards');
 }
 
@@ -457,6 +480,11 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 		if(get_option('apt_post_analysis_title') == 0 AND get_option('apt_post_analysis_content') == 0 AND get_option('apt_post_analysis_excerpt') == 0){
 			return 6;
 		}
+		//the user does not want us to process 0 characters, stop!
+		if(get_option('apt_miscellaneous_substring_analysis') == 1 AND get_option('apt_miscellaneous_substring_analysis_length') == 0){
+			return 7;
+		}
+
 
 //	}//-moron check
 
@@ -504,6 +532,10 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 		}
 		if(get_option('apt_string_manipulation_replace_whitespaces') == 1){
 			$apt_post_analysis_haystack_string = preg_replace(array('/\s{2,}/', '/[\t\n]/'), ' ', $apt_post_analysis_haystack_string); //replace whitespaces and newline characters with a space
+		}
+
+		if(get_option('apt_miscellaneous_substring_analysis') == 1){ //analyse onlya part of the string
+			$apt_post_analysis_haystack_string = substr($apt_post_analysis_haystack_string, get_option('apt_miscellaneous_substring_analysis_start'), get_option('apt_miscellaneous_substring_analysis_length'));
 		}
 
 		$apt_post_analysis_haystack_string = ' '. $apt_post_analysis_haystack_string .' '; //we need to add a space before and after the string: the engine is looking for ' string ' (with space at the beginning and the end, so it won't find e.g. ' ice ' in a word ' iceman ')
@@ -658,14 +690,12 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 				//we need to check if the tag isn't already in the array of the current tags (don't worry about the temporary array for adding tags, only unique values are pushed in)	
 				if(get_option('apt_handling_current_tags') == 2 OR $apt_post_current_tag_count == 0){ //if we need to replace tags, don't check for the current tags or they won't be added again after deleting the old ones --- $apt_post_current_tag_count == 0 will work also for the "do nothing" option
 						array_push($apt_tags_to_add_array, $apt_table_cell[0]); //add tag to the array
-						update_option('apt_stats_assigned_tags', get_option('apt_stats_assigned_tags') + 1); //add 1 for every tag added to a post
 
 //die("tag:". htmlspecialchars($apt_table_cell[0]) ."<br>current tags: ". htmlspecialchars(print_r($apt_tags_to_add_array, true))); //for debugging
 				}
 				else{//appending tags? check for current tags to avoid adding duplicate records to the array
 					if(in_array($apt_table_cell[0], $apt_post_current_tags) == FALSE){
 						array_push($apt_tags_to_add_array, $apt_table_cell[0]); //add tag to the array
-						update_option('apt_stats_assigned_tags', get_option('apt_stats_assigned_tags') + 1); //add 1 for every tag added to a post
 					}
 				}
 
@@ -685,16 +715,17 @@ function apt_tagging_algorithm($post_id){ //this function is for adding tags to 
 		//if the post has already tags, we should decide what to do with them
 		if(get_option('apt_handling_current_tags') == 1 OR get_option('apt_handling_current_tags') == 3){
 			wp_set_post_terms($post_id, $apt_tags_to_add_array, 'post_tag', true); //append tags
+			update_option('apt_stats_assigned_tags', get_option('apt_stats_assigned_tags') + count($apt_tags_to_add_array)); //update stats
 		}
 		if(get_option('apt_handling_current_tags') == 2 AND count($apt_tags_to_add_array) != 0){ //if the plugin generated some tags, replace the old ones,otherwise do not continue!
 			wp_set_post_terms($post_id, $apt_tags_to_add_array, 'post_tag', false); //replace tags
+			update_option('apt_stats_assigned_tags', get_option('apt_stats_assigned_tags') + count($apt_tags_to_add_array)); //update stats
 		}
 
 //die("current tags: ". htmlspecialchars(print_r($apt_post_current_tags, true)) . "<br>array to add: ". htmlspecialchars(print_r($apt_tags_to_add_array, true))); //for debugging
 
 	}//- revision check
 }//-end of tagging function
-
 
 #################################################################
 ########################## HOOKS ################################
@@ -761,15 +792,30 @@ if(isset($_POST['apt_save_settings_button'])){ //saving all form data
 
 	update_option('apt_word_recognition_separators', stripslashes(html_entity_decode($_POST['apt_word_recognition_separators'], ENT_QUOTES)));
 
+	update_option('apt_miscellaneous_substring_analysis', (isset($_POST['apt_miscellaneous_substring_analysis'])) ? '1' : '0');
 	update_option('apt_miscellaneous_wildcards', (isset($_POST['apt_miscellaneous_wildcards'])) ? '1' : '0');
 
 	//making sure that people won't save rubbish in the DB
+	if(is_numeric($_POST['apt_miscellaneous_substring_analysis_length'])){
+		update_option('apt_miscellaneous_substring_analysis_length', $_POST['apt_miscellaneous_substring_analysis_length']);
+	}
+	else{
+		echo '<div id="message" class="error"><p><b>Error:</b> The option "apt_miscellaneous_substring_analysis_length" couldn\'t be saved because the sent value wasn\'t numeric.</p></div>'; //user-moron scenario
+	}
+	if(is_numeric($_POST['apt_miscellaneous_substring_analysis_start'])){
+		update_option('apt_miscellaneous_substring_analysis_start', $_POST['apt_miscellaneous_substring_analysis_start']);
+	}
+	else{
+		echo '<div id="message" class="error"><p><b>Error:</b> The option "apt_miscellaneous_substring_analysis_start" couldn\'t be saved because the sent value wasn\'t numeric.</p></div>'; //user-moron scenario
+	}
 	if(is_numeric($_POST['apt_miscellaneous_tag_maximum'])){
 		update_option('apt_miscellaneous_tag_maximum', $_POST['apt_miscellaneous_tag_maximum']);
 	}
 	else{
 		echo '<div id="message" class="error"><p><b>Error:</b> The option "apt_miscellaneous_tag_maximum" couldn\'t be saved because the sent value wasn\'t numeric.</p></div>'; //user-moron scenario
 	}
+
+
 	//print message informing the user about better performance if they delete separators
 	if(isset($_POST['apt_string_manipulation_replace_nonalphanumeric']) AND get_option('apt_word_recognition_separators') != ''){ //display this note only if there are not any separators
 		echo '<div id="message" class="updated"><p><b>Note:</b> Replacing non-alphanumeric characters with spaces has been activated. <b>Deleting all user-defined word separators</b> is recommended for better performance.</p></div>'; //user-moron scenario
@@ -1046,6 +1092,8 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 			<div class="postbox">
 				<h3>Show some love!</h3>
 				<div class="inside">
+					<p>If you find this plugin useful, please give it a good rating and share it with others.</p>
+<!--
 					<p>If you find this plugin useful, please consider donating. Every donation, no matter how small, is appreciated. Your support helps cover the <acronym title="webhosting fees etc.">costs</acronym> associated with development of this <em>free</em> software.</p>
 
 					<ul>
@@ -1053,22 +1101,21 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 					</ul>
 
 					<p>If you can't donate, it's OK - there are other ways to make the developer happy.</p>
-
+-->
 					<ul>
 					<li><a class="apt_sidebar_link apt_rate" href="http://wordpress.org/extend/plugins/automatic-post-tagger">Rate plugin at WordPress.org</a></li>
+					<li><a class="apt_sidebar_link apt_twitter" href="http://twitter.com/home?status=Automatic Post Tagger - useful WordPress plugin that automatically adds user-defined tags to posts. http://wordpress.org/extend/plugins/automatic-post-tagger">Post a link to Twitter</a></li>
 					<li><a class="apt_sidebar_link apt_wp_new_post" href="<?php echo admin_url('post-new.php'); ?>">Review this plugin on your blog</a></li>
-					<li><a class="apt_sidebar_link apt_twitter" href="http://twitter.com/home?status=Automatic Post Tagger - useful WordPress plugin that automatically adds user-defined tags to posts and pages. http://wordpress.org/extend/plugins/automatic-post-tagger">Post a link to Twitter</a></li>
-
 					</ul>
 
-					<p>Thank you very much for your support.</p>
+					<p>Thank you.</p>
 
 				</div>
 			</div><!-- //-postbox -->
 			
 			<!-- postbox -->
 			<div class="postbox">
-				<h3>Recent contributors<span style="float:right;"><small><a href="http://wordpress.org/extend/plugins/automatic-post-tagger/other_notes">Full list</a></small></span></h3>
+				<h3>Recent contributions <span style="float:right;"><small><a href="http://wordpress.org/extend/plugins/automatic-post-tagger/other_notes">Full list</a></small></span></h3>
 				<div class="inside">
 					<p><iframe border="0" allowtransparency="yes" style="width:100%; height:35px;" src="http://devtard.com/projects/automatic-post-tagger/contributors.php" frameborder="0" scrolling="no">List of recent contributors</iframe></p>
 				</div>
@@ -1120,6 +1167,7 @@ if(isset($_POST['apt_assign_tags_to_all_posts_button'])){
 						<p>
 							<b>Miscellaneous</b><br />
 							<label for="apt_miscellaneous_tag_maximum">Maximum number of tags per post:</label> <input type="text" name="apt_miscellaneous_tag_maximum" id="apt_miscellaneous_tag_maximum" value="<?php echo get_option('apt_miscellaneous_tag_maximum'); ?>" maxlength="10" size="3"><br />
+							<input type="checkbox" name="apt_miscellaneous_substring_analysis" id="apt_miscellaneous_substring_analysis" <?php if(get_option('apt_miscellaneous_substring_analysis') == 1) echo 'checked="checked"'; ?>> <label for="apt_miscellaneous_substring_analysis">Analyze only</label> <input type="text" name="apt_miscellaneous_substring_analysis_length" value="<?php echo get_option('apt_miscellaneous_substring_analysis_length'); ?>" maxlength="10" size="2"> characters starting at position <input type="text" name="apt_miscellaneous_substring_analysis_start" value="<?php echo get_option('apt_miscellaneous_substring_analysis_start'); ?>" maxlength="5" size="3"> <small>(<a href="http://www.php.net/manual/en/function.substr.php" title="Manual entry for function substr">more information</a>)</small><br />
 							<input type="checkbox" name="apt_miscellaneous_wildcards" id="apt_miscellaneous_wildcards" <?php if(get_option('apt_miscellaneous_wildcards') == 1) echo 'checked="checked"'; ?>> <label for="apt_miscellaneous_wildcards">Use the wildcard (*) to substistute any aplhanumeric characters in related words</label><br />
 							<span style="margin-left: 18px;"><small>(Example: pattern "cat*" will match words "cats" and "category", pattern "c*t" will match "cat" and "colt".)</small></span>
 						</p>

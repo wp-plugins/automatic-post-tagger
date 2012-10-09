@@ -1,6 +1,5 @@
 === Automatic Post Tagger ===
 Contributors: Devtard
-Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=T2QUJ4R6JHKNG
 Tags: add, auto, autoblog, automatic, autotag, autotagger, generate, keyword, keywords, post, posts, related, relevant, seo, tag, tagger, tagging, tags, word, words
 Requires at least: 3.0
 Tested up to: 3.4.2
@@ -19,7 +18,8 @@ With APT you won't have to manually add tags ever again. You just have to create
 * Adds tags to all posts with just one click (three ways of handling already assigned tags)
 * Configurable maximum amount of tags per post (Automatic Post Tagger won't add more tags than you want)
 * Supports importing already existing tags, creating and importing backups
-* Workaround for Latin diacritic characters (non-Latin alphabets like Arabic or Chinese aren't supported yet)
+* Workaround for Latin diacritic characters (non-Latin alphabets like Arabic or Chinese aren't supported)
+* Autoblog friendly
 
 == Installation ==
 1. Upload the plugin to the '/wp-content/plugins/' directory.
@@ -53,13 +53,16 @@ Automatic Post Tagger stores tags and related words in a table called "wp_apt_ta
 * apt_string_manipulation_ignore_asterisks
 * apt_word_recognition_separators
 * apt_miscellaneous_tag_maximum
+* apt_miscellaneous_substring_analysis
+* apt_miscellaneous_substring_analysis_length
+* apt_miscellaneous_substring_analysis_start
 * apt_miscellaneous_wildcards
 
 = What happens after deleting the plugin? Will I have to remove its options etc. from my database? =
 No. All plugin data will be automatically removed from your database after you delete the plugin via your administration interface.
 
 = I get the "Maximum execution time of XY seconds exceeded" error when trying to assign tags to all posts. =
-Delete all word separators and use the option "Replace non-alphanumeric characters with spaces".
+Delete all word separators and use the option "Replace non-alphanumeric characters with spaces" or try to assign less tags at once or let set the plugin to analyse less charcters per post.
 
 = I can't delete tags assigned by the plugin, it recreates them again! What should I do? =
 If you are trying to delete tags from a published post you have to deactivate the plugin in order to delete tags.
@@ -73,20 +76,27 @@ You are most likely trying to import records with duplicate tag names which are 
 = ATP doesn't add tags even if they or their related words are in my post! =
 This may happen if you put a PHP code in your post that doesn't have correct opening/closing tags (`<?php` and `?>`).
 
-= APT doesn't add unusual tags to my posts, for example HTML tags like`<a>`. =
+= APT doesn't add unusual tags to my posts, for example HTML tags like `<a>`. =
 WordPress isn't able to do that, it just saves gibberish or an ampty string to the database.
 
 = Which tag will be added if I want to add only one tag per post? =
 The one that has the lowest ID (and was found in your post, of course).
 
 = I have another problem that isn't described on this page and wasn't solved by reinstalling the plugin. =
-Please post a new thread on the [support forum](http://wordpress.org/support/plugin/automatic-post-tagger "support forum").
+Please post a new thread on the [support forum](http://wordpress.org/support/plugin/automatic-post-tagger).
 
 == Donors ==
 = Recent donations =
-Nobody has donated yet. Be the first and have your link displayed here!
+* 07/10/2012: [askdanjohnson.com](http://askdanjohnson.com)
 
 == Changelog ==
+= 1.3 =
+* New feature: Content analysis of a substring
+* Fixed: Bug causing not removing option "apt_string_manipulation_lowercase" from the database
+* Fixed: Bug responsible for not very accurate stats for assigned tags
+* Changed: Upgrade function improved
+* Removed (temporarily): Donation notice and Paypal links
+
 = 1.2 =
 * New feature: Custom word separators
 * New feature: Option for converting diacritic characters to their ASCII equivalents
@@ -120,6 +130,9 @@ Nobody has donated yet. Be the first and have your link displayed here!
 * Initial release
 
 == Upgrade Notice ==
+= 1.3 =
+* New feature: You can choose to analyse only a specific part of the content.
+
 = 1.2 =
 * New features: Customizable word separators and more control over the searching process.
 
