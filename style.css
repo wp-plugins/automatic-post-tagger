@@ -1,0 +1,16 @@
+.apt_donation_notice_link{float:right;display:block;border:none;}
+
+.apt_sidebar_link{padding:4px 0px 4px 25px;background-repeat:no-repeat;background-position:5px 50%;border:none;}
+.apt_sidebar_link.apt_wp{background-image:url(images/wp_logo.png)}
+.apt_sidebar_link.apt_wp_new_post{background-image:url(images/wp_new_post.png)}
+.apt_sidebar_link.apt_donate{background-image:url(images/paypal_logo.png)}
+.apt_sidebar_link.apt_rate{background-image:url(images/wp_rating_star.png)}
+.apt_sidebar_link.apt_twitter{background-image:url(images/twitter_logo.png)}
+.apt_sidebar_link.apt_devblog{background-image:url(images/devblog_logo.png)}
+
+.inside p {margin-bottom:0;}
+.apt_sub_option{margin-left:20px;}
+
+.apt_warning:hover{background:#FFD2D2;}
+.postbox h3{cursor:default;}
+.handlediv {cursor:pointer;}
