@@ -1,191 +1,125 @@
 === Automatic Post Tagger ===
 Contributors: Devtard
 Donate link: http://devtard.com/donate
-Tags: add, auto, autoblog, automatic, autotag, autotagging, auto tag, autotagger, generate, keyword, keywords, post, posts, related, relevant, seo, suggest, tag, tagger, tagging, tags, word, words
+Tags: automatic, autotagger, keyword, keywords, post, posts, regex, related, relevant, seo, tag, tags, tagger, tagging, wildcard
 Requires at least: 3.0
-Tested up to: 3.6
+Tested up to: 4.0
 Stable tag: trunk
-License: GPLv2
+License: GPLv2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 This plugin automatically adds user-defined tags to posts.
 
 == Description ==
-With APT you won't have to manually add tags ever again. You just have to create a list of tags with related words for each of them and you are done. This plugin will **add relevant tags automatically** when a post is published or updated. It is perfect for autoblogs and lazy bloggers. :)
+APT uses a list of keywords created by the user to automatically tag posts when they're saved/published. Version 1.6 fully supports UTF-8 characters.
 
-= Features = 
-* Automatically adds tags to posts according to their title, content and excerpt
-* Tags can be added when different user-defined keywords are found
-* Smart wildcard representation of any alphanumeric characters
-* Configurable maximum number of tags per post
-* Bulk tagging of multiple posts
-* Import/export tool
-* Workaround for Latin diacritic characters (non-Latin alphabets, e.g. Arabic or Chinese aren't supported yet)
-
-*Follow [@devtard_com](http://twitter.com/devtard_com) on Twitter or subscribe to my blog [devtard.com](http://devtard.com) to keep up to date on new releases and WordPress-related information.*
+= Features =
+* Automatically tags posts according to their title, content and excerpt
+* Tags can be added when different user-defined keywords ("related words") are found
+* Wildcard (regex) support for related words
+* Bulk tagging tool for processing multiple posts at once
+* Supports custom taxonomies & post types
+* Import/Export tool for keywords
+* And more (see screenshots)
 
 == Installation ==
-1. Upload the plugin to the '/wp-content/plugins/' directory.
-2. Activate it through the 'Plugins' menu in WordPress.
-3. Configure the plugin (Settings -> Automatic Post Tagger).
+1. Install and activate the plugin.
+2. Configure the plugin (Settings -> Automatic Post Tagger).
+3. Create (import) keywords.
+4. Publish/update a post (or use the bulk tagging tool to make the plugin process all posts). If your keywords or their related words are found, new tags will be added.
 
 == Screenshots ==
 1. Administration interface
 2. Widget located next to the post editor
 
 == Frequently Asked Questions ==
+= The "max_input_vars" limit has been exceeded and I can't edit or delete keywords. =
+You may encounter this problem if the plugin stores a lot keywords in the database and your PHP configuration prevents input fields from being submitted if there's too many of them. You can fix this by doing one of the following:
 
-= I have a problem that isn't described on this page and wasn't solved by reinstalling the plugin. =
-Please post a new thread on the [support forum](http://wordpress.org/support/plugin/automatic-post-tagger).
+1. Change the "Keyword management mode" to "Single input field for all keywords". (You may also use the import/export tool to change the keywords, however you will have to reinstall the plugin every time you need to delete some keywords.)
+2. If you can modify your PHP configuration, change the variable "max_input_vars" in your php.ini file to a higher value (1000 is usually the default value).
 
-= I get the "Maximum execution time of XY seconds exceeded" error when trying to assign tags to multiple posts. =
-Lower the number of posts tagged per cycle.
+= I'm getting the "Maximum execution time of XY seconds exceeded" error when tagging posts. =
+This might happen if your posts are long or you have a lot of keywords in the database. Here's what you can do:
 
-= I can't delete tags assigned by the plugin, it recreates them again! What should I do? =
-If you are trying to delete tags from a published post you have to deactivate the plugin in order to delete tags.
+1. Remove some of your word separators (or enable the option "Replace non-alphanumeric characters with spaces" to ignore them completely).
+2. Enable the option "Analyze only XY characters starting at position XY".
+3. Lower the number of posts tagged per cycle when using the bulk tagging tool.
+4. If you can modify your PHP configuration, change the variable "max_execution_time" in your php.ini file to a higher value (30 is usually the default value).
 
-= Some tags can't be imported from my backup. Why? =
-You are most likely trying to import records with duplicate tag names which are ignored by the plugin.
+= I want to add categories to posts instead of tags, what should I do to make it work? =
+In the "Settings" widget change the value of the "Taxonomy assigned to posts" option to "category". New categories will be added only if you change keyword names to category IDs instead of their actual names. (When creating a new keyword representing the category "Uncategorized", you'll have to put its ID "1" into the field "Keyword name". If specified related words are found, this category will be added to a post.) Also make sure to uncheck "Keyword names" in the "Search for these items" section if you don't want APT to add categories if their IDs are found in posts. See [this page](http://devtard.com/?p=820) for more information.
 
-= ATP doesn't add tags even if they or their related words are in my post! =
-This may happen if you put a PHP code in your post that doesn't have correct opening/closing tags (`<?php` and `?>`). You may want to check the option "Replace non-alphanumeric characters with spaces" if you are unable/unwilling to correct your code, but you still want to analyze it. Also make sure that the option "Strip PHP/HTML tags from analyzed content" is unchecked.
-
-= APT doesn't add unusual tags to my posts, for example HTML tags like &lt;a&gt;. =
-WordPress isn't able to do that, it just saves gibberish or an ampty string to the database.
-
-= Which plugin data is stored in the database? =
-APT stores tags and related words in a table called "wp_apt_tags". Plugin settings can be found in the option "automatic_post_tagger".
-All plugin data will be automatically removed from your database after you delete the plugin via your administration interface.
+= Where does the plugin store its settings? =
+The settings and keywords + related words can be found in the following options (DB table wp_options): "automatic_post_tagger", "automatic_post_tagger_keywords" (both of them will be removed if you uninstall the plugin).
 
 == Changelog ==
-= 1.5 =
-* New feature: Custom string separator
-* New feature: Import/export of "real" CSV files (the script no longer uses a custom file structure)
-* New feature: Meta box is able to display confirmation and error messages
-* New feature: Option for hiding warning messages
-* New feature: Option for using wildcards for non-alphanumeric values
-* New feature: Storing multiple backups at once and deleting older ones automatically
-* Fixed: Bug causing jQuery issues on the page with the post editor
-* Fixed: Bug causing not removing uploaded files from the plugin directory
-* Fixed: Bug causing the inability to add tags with characters that need to be stripslashed before saving and htmlspecialcharsed when displaying
-* Fixed: Inability to use a vertical bar in tags and related words
-* Fixed: Not removing temporary CSV files after uploading
-* Fixed: PHP notices triggered by undefined variables
-* Fixed: Unnecessary loading of post title, content or excerpt when not needed
-* Added: AJAX response dialogues in the meta box for adding tags
-* Added: Clickable link for continuing the bulk tagging if the browser fails to redirect to another page
-* Added: Condition for checking whether plugin settings already exist
-* Added: Condition for checking whether there are tags that can be exported
-* Added: Condition for checking whether the separator is included when saving appropriate options
-* Added: Condition for checking whether we need to print a JS function
-* Added: Donation links
-* Added: Link to developer's Twitter account
-* Added: New directory "backup" for backup files
-* Added: New directory "css" for CSS files
-* Added: New directory "js" for JS files
-* Added: New function for creating options
-* Added: New image "apt_sprite_icons.png" to the directory "images"
-* Added: New option "automatic_post_tagger"
-* Added: New "tooltip" bubbles replaced ubiquitous explanatory notes
-* Added: Nonces for AJAX scripts
-* Added: Nonces for links with GET parameters
-* Added: Numeric values are being checked whether they are natural and integers
-* Added: Prompt asking for "showing some love" (plugin rating, sharing on social networks etc.)
-* Added: Replacing old wildcard characters and string separators when a new value is set
-* Added: Storing plugin settings in one option with an array
-* Added: UNIX timestamp in file names of CSV backups; users can now import any file with the prefix "apt_backup"
-* Added: Usage of the internal WP jQuery library
-* Added: Usage of the $wpdb class (including its prepare method for preventing SQL injection)
-* Removed: All DB options from version 1.4
-* Removed: All icons in the directory "images"
-* Removed: Category prefixes in option names
-* Removed: dbDelta function for creating the table for tags
-* Removed: Deprecated PHP functions (mysql_query, mysql_fetch_array, mysql_num_rows)
-* Removed: Iframe displaying latest contributors (I am too lazy to update it in real time and I also removed it for security reasons) - data is being hardcoded instead
-* Removed: Link to jQuery library at googleapis.com
-* Removed: Link to review the plugin as a new post
-* Removed: Link to the contributions page in readme.txt (there are too few records which don't need a special page)
-* Removed: Stats for overall assigned tags (I wasn't able to find a working solution for updating the number of added tags without using an extra option - using the main option for all settings didn't work while tagging multiple posts at once in a loop.)
-* Removed: The ability to hide small widgets on the right side
-* Removed: Unnecessary tag IDs in backup files
-* Removed: Unnecessary variables storing $_POST values that were taking extra space
-* Renamed: Directory "images" -> "img"
-* Updated: Code structure (positions of several functions were rearranged)
-* Updated: CSS classes for widgets and sidebar links with icons
-* Updated: CSS enqueuing
-* Updated: Meta box for adding tags
-* Updated: Error handling (variables for HTML message tags)
-* Updated: Function "apt_get_plugin_version" uses the function "get_plugin_data" now
-* Updated: Functions preq_quote() use a new parameter '/'
-* Updated: Function for displaying the admin prompt will be displayed only if no other notice is active
-* Updated: Location of backup files (moved to the directory "backup")
-* Updated: Option "apt_bulk_tagging_statuses" (new default post status "inherit")
-* Updated: Option "apt_word_recognition_separators" (new default separators "\" and "|")
+= 1.6 =
+New features:
 
-= 1.4 =
-* New feature: Customizable bulk tagging
-* New feature: Forms use nonces for better security
-* New feature: Users can hide widgets on the options page
-* Added: Link to the developer's blog
-* Changed: The widget form is now sending data when hitting enter.
-* Changed: Explode() functions don't use the parameter 'limit' now
-* Changed: Functions searching for strings with separators don't use 2 foreach functions now but a single (a bit faster) regular expression
-* Changed: Minor design changes
-* Changed: Export button was moved to the widget "Import/Export tags"
+* UTF-8 support
+* Custom taxonomy and post types
+* Customizable wildcard regex pattern
+* Multicharacter word separators; a space is not automatically treated as a separator anymore (HTML entities can be used to avoid problems if some word separators use characters identical to the delimiter)
+* New keyword management mode
+* Old tags can be removed from posts even if no new tags are found and added by the plugin
+* Automatic backup of keywords when updating the plugin
+* Users can choose not to search for keyword names in post content
+* Automatic input adjustment can be turned off
 
-= 1.3 =
-* New feature: Content analysis of a substring
-* Fixed: Bug causing not removing the option "apt_string_manipulation_lowercase" from the database
-* Fixed: Bug responsible for not very accurate stats for assigned tags
-* Changed: Upgrade function improved
-* Removed (temporarily): Donation notice and Paypal links
+Fixed:
+ 
+* Multiple whitespace characters are being replaced with spaces also in the needles - not just in the haystack
+* Multiple whitespace characters are being replaced with multiple spaces now (only one space was used before - it turns out that it causes problems when finding needles with wildcards)
+* Function replacing non-alphanumeric characters replaces also whitespace characters now
+* All relevant variables that are being printed now use the htmlspecialchars functions to make sure that submitted HTML code is displayed as plain text and doesn't mess up the displayed page
+* Character limit removed from fgetcsv functions
+* Keywords and related words are now being processed with the function htmlspecialchars before displaying in (confirmation) messages
+* Duplicite keywords are being ignored when importing, stats fixed
+* Wildcards match ANY characters in related words by default, not just alphanumeric characters
+* Searching for related words (with appropriate word separators) when wildcard support is disabled
+* Finding keywords/related words with special (regex) characters should work just fine; preg_match "Unknown modifier" warnings should no longear appear
+* Undefined indexes
 
-= 1.2 =
-* New feature: Custom word separators
-* New feature: Option for converting diacritic characters to their ASCII equivalents
-* New feature: Option for ignoring asterisks when replacing non-alphanumeric characters with spaces
-* New feature: Option for lowercasing strings
-* New feature: Option for replacing non-alphanumeric characters with spaces
-* New feature: Option for replacing whitespace characters with spaces
-* New feature: Option for stripping PHP/HTML tags
-* Fixed: Bug causing adding duplicate tags to an array (resulting in less space for other tags if the tag limit is set too low)
-* Fixed: Bug preventing the script from calculating the max. number of tags that can be added to a post in the case when we don't want to append tags 
-* Fixed: Pressing enter when typing in the APT widget doesn't submit the form anymore
-* Changed: APT is searching for tags only when no substrings were found (more efficient)
-* Changed: Update messages now use htmlspecialchars() to display names of tags and related words
-* Changed: Variables in foreach loops are being unsetted
-* Removed: Facebook share link
-* Removed: Option "apt_miscellaneous_tagging_occasion" (tagging algorithm can't be run when saving a post anymore - only for debugging purposes)
+Added:
 
-= 1.1 =
-* New feature: Background color of inputs changes when we check the checkbox
-* New feature: Meta box located next to the post editor allowing adding tags directly to the database.
-* Fixed: Grammar errors
-* Fixed: Link to the donor list
-* Fixed: Non-alphanumeric characters in needles (searched phrases) are now replaced with spaces.
-* Fixed: Update function can be triggered also on page update.php
-* Changed: Creating tags from the widget and the options page is done by using the same function
-* Changed: Donation notification will appear after a month
-* Changed: Labels now have the "for" parameter
-* Removed: Link to the developer's blog
+* New option automatic_post_tagger_keywords
+* New CSS rule for warning and note messages
+* Widget with links to my other plugins
 
-= 1.0 =
-* Initial release
+Removed:
+
+* Table "wp_apt_tags" and several suboptions
+* Message encouraging users to rate the plugin (annoying and unnecessary)
+* The "Contributors" widget
+* Function apply_filters (no longer necessary)
+
+Other changes:
+
+* APT now uses the word "keyword" to distinguish the WP tags taxonomy from user-defined tags ("keywords") - many variables and names were changed
+* Maxlength values increased from 255 to 5000
+* The default number of stored backups is 10
+* If multiple keywords with the same names are being saved, the one processed later will be removed
+* The "Import keywords from the database" tool now imports any taxonomy that happens to be specified in settings
+* If a keyword name is missing when saving all keywords, this particular keyword will be removed
+* If the user wants to ignore non-alphanumeric characters, the script automatically ignores currently set word separators and only a space is regarded as one (this should make the searching process sligthly faster)
+* The input "#apt_box_keyword_name" will remain active after creating a new keyword via the metabox (which allows faster adding of new keywords from the post editor)
+* The APT meta box is displayed and the post can be tagged only if the current post type is allowed by the user
+* Names of backup files now use unique IDs instead of timestamps
+* If the backup folder doesn't exist or has insufficient permissions, the plugin attempts to fix that
+* Exported keywords are now alphabetically sorted in the CSV file
+* The update algorithm (backward compatibility among other things - updating from older versions to the newest one instead of the following one)
+* User-defined $apt_post_types and $apt_post_statuses are now being prepared via WP API
+* The bulk tagging tool now shows the total number of added tags and remaining post IDs in the queue
+* New function for changing visibility of widgets
+* Values of suboptions "apt_word_separators", "apt_bulk_tagging_statuses", "apt_hidden_widgets" were reset
+* Suboptions "apt_bulk_tagging_statuses", "apt_hidden_widgets", "apt_bulk_tagging_queue", "apt_word_separators" changed from string type to array (no need to automatically change string separators in these options when the user changes it anymore)
+* Update and installation admin notices are now being dismissed when the plugin verifies that the user actually visited the options page
+* Special function for conditions that use the global $pagenow variable
+* CSS, JS and the sprite image are now being called with the version parameter to prevent caching of old files
+* Underscores in all file names were replaced with dashes (that includes also backup files)
+* Minor appearance changes
 
 == Upgrade Notice ==
-= 1.5 =
-* Multiple new features, improved speed, stability and security of the plugin.
-
-= 1.4 =
-* New features: You can customize behaviour of the bulk tagging algorithm and toggle widgets.
-
-= 1.3 =
-* New feature: You can choose to analyze only a specific part of the content.
-
-= 1.2 =
-* New features: Customizable word separators and more control over the searching process.
-
-= 1.1 =
-* New feature: You can create tags directly from a widget under the post editor now.
-
-= 1.0 =
-* Initial release
+= 1.6 =
+* Multiple new features and bug fixes

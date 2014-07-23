@@ -4,7 +4,7 @@ function apt_toggle_widget(num){
 	var apt_widget_id = num;
 
 	if(ele.style.display == "block"){
-    		ele.style.display = "none"; //display the change immediately - we won't wait for the script, that would be too slow
+    	ele.style.display = "none"; //display the change immediately - we won't wait for the script, that would be too slow
 
 		//save id to db
 		var data = {
@@ -38,12 +38,12 @@ function apt_toggle_widget(num){
 
 //change backgrounds of input fields
 function apt_change_background(num){
-	if (document.getElementById("apt_taglist_checkbox_"+num).checked){
-		document.getElementById("apt_taglist_tag_"+num).style.backgroundColor='#FFD2D2';
-		document.getElementById("apt_taglist_related_words_"+num).style.backgroundColor='#FFD2D2';
+	if (document.getElementById("apt_keywordlist_checkbox_"+num).checked){
+		document.getElementById("apt_keywordlist_keyword_"+num).style.backgroundColor='#FFD2D2';
+		document.getElementById("apt_keywordlist_related_words_"+num).style.backgroundColor='#FFD2D2';
 	}
 	else{
-		document.getElementById("apt_taglist_tag_"+num).style.backgroundColor='';
-		document.getElementById("apt_taglist_related_words_"+num).style.backgroundColor='';
+		document.getElementById("apt_keywordlist_keyword_"+num).style.backgroundColor='';
+		document.getElementById("apt_keywordlist_related_words_"+num).style.backgroundColor='';
 	}
 }

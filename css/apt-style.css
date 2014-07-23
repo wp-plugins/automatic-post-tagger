@@ -1,0 +1,53 @@
+.inside table {clear:none !important;}
+.inside .submit{padding:5px 0 0 0 !important;}
+.inside p {margin-bottom:0;}
+.postbox h3{cursor:default !important;}
+.postbox .title {padding-left:0 !important;padding-top:30px !important;}
+
+.form-table, .form-table td, .form-table th, .form-table td p, table td, table td p {font-size: 13px;}
+.form-table th {padding: 10px 0 0 0; font-weight: 400;}
+.form-table td {padding: 10px 0 0 10px;}
+
+.warning{border-left:4px solid #ffba00 !important;}
+.note{border-left:4px solid #2ea2cc !important;}
+
+.handlediv:before{ /* copied from the WP Dashboard page via the Firefox Inspector tool */
+	font-family: "dashicons";
+	content: "\f140";
+	right: 12px;
+	font: 400 20px/1 dashicons;
+	display: inline-block;
+	padding: 8px 10px;
+	top: 0px;
+	position: relative;
+	text-decoration: none !important;
+}
+
+.apt_help{cursor:help;padding:0px 3px;margin-left:6px;background:#c9c9c9;color:white;font-size:10px;font-family:Courier;font-weight:bold;border-radius:20px;}
+.apt_help:hover{background:#a1a4c9;}
+
+.apt_icon{background-image:url(../img/apt-sprite-icons.png?ver=1.6);background-repeat:no-repeat;width:16px;height:16px;float:left;margin-right:5px;}
+.apt_wp{background-position: 0px 0px;}
+.apt_rate{background-position: -17px 0px;}
+.apt_btc{background-position: -34px 0px;}
+
+.apt_already_installed{color:green;}
+
+.apt_right{float:right;}
+.apt_sub_option{margin-left:20px;}
+
+.apt_manage_keywords_textarea{height:400px;width:100%;margin-top:15px;}
+.apt_manage_keywords{max-height:400px;overflow:auto;}
+.apt_red_background:hover{background:#FFD2D2 !important;}
+
+.apt_margin_left_18{margin-left:18px;}
+.apt_width_100_percent{width:100%;}
+.apt_width_65_percent{width:65%;}
+.apt_width_35_percent{width:35%;}
+
+.apt_custom_list{list-style-type:disc;margin-left:15px;}
+.apt_button_margin_left{margin-left:5px !important;}
+
+#apt_box_keyword_name{min-width:50px;width:100%;}
+#apt_box_keyword_related_words{min-width:50px;width:100%;}
+#apt_box_message{margin-top:10px;clear:both !important;}
