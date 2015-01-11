@@ -8,19 +8,18 @@ Stable tag: 1.6
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-This plugin automatically adds user-defined tags to posts.
+This plugin uses a list of keywords provided by the user to automatically tag posts according to their title, content and excerpt.
 
 == Description ==
-APT uses a list of keywords created by the user to automatically tag posts when they're saved/published. Version 1.6 fully supports UTF-8 characters.
 
 = Features =
-* Automatically tags posts according to their title, content and excerpt
-* Tags can be added when different user-defined keywords ("related words") are found
-* Wildcard (regex) support for related words
+* APT adds tags to posts when keywords specified by the user are found; tagging automatically occurs while posts are being saved/published via the post editor
+* Wildcard (regex) support for Related words
 * Bulk tagging tool for processing multiple posts at once
-* Supports custom taxonomies & post types
 * Import/Export tool for keywords
-* And more (see screenshots)
+* Supports custom taxonomies & post types
+* Supports UTF-8 characters
+* And more (see [Screenshots](http://wordpress.org/plugins/automatic-post-tagger/screenshots/))
 
 == Installation ==
 1. Install and activate the plugin.
