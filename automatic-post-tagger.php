@@ -2,7 +2,7 @@
 /*
 Plugin Name: Automatic Post Tagger
 Plugin URI: http://wordpress.org/plugins/automatic-post-tagger/
-Description: This plugin automatically adds user-defined tags to posts.
+Description: This plugin uses a list of keywords provided by the user to automatically tag posts according to their title, content and excerpt.
 Version: 1.6
 Author: Devtard
 Author URI: http://devtard.com
@@ -171,6 +171,7 @@ function apt_install_plugin(){ //runs only after MANUAL activation! (also used f
 
 	if(get_option('automatic_post_tagger_keywords') == false){ //create the option only if it doesn't exist yet
 		add_option('automatic_post_tagger_keywords', array(), '', 'no'); //single option for storing keywords
+
 	}
 }
 
