@@ -11,7 +11,7 @@
 .warning{border-left:4px solid #ffba00 !important;}
 .note{border-left:4px solid #2ea2cc !important;}
 
-.handlediv:before{ /* copied from the WP Dashboard page via the Firefox Inspector tool */
+.handlediv:before{
 	font-family: "dashicons";
 	content: "\f140";
 	right: 12px;
@@ -29,23 +29,21 @@
 .apt_icon{background-image:url(../img/apt-sprite-icons.png?ver=1.6);background-repeat:no-repeat;width:16px;height:16px;float:left;margin-right:5px;}
 .apt_wp{background-position: 0px 0px;}
 .apt_rate{background-position: -17px 0px;}
-.apt_btc{background-position: -34px 0px;}
-
-.apt_already_installed{color:green;}
+.apt_patreon{background-position: -34px 0px;}
 
 .apt_right{float:right;}
-.apt_sub_option{margin-left:20px;}
+.apt_sub_option{margin-left:25px;}
 
 .apt_manage_keywords_textarea{height:400px;width:100%;margin-top:15px;}
 .apt_manage_keywords{max-height:400px;overflow:auto;}
 .apt_red_background:hover{background:#FFD2D2 !important;}
+.apt_font_weight_normal{font-weight:normal;}
 
-.apt_margin_left_18{margin-left:18px;}
 .apt_width_100_percent{width:100%;}
 .apt_width_65_percent{width:65%;}
 .apt_width_35_percent{width:35%;}
 
-.apt_custom_list{list-style-type:disc;margin-left:15px;}
+.apt_custom_list{list-style-type:disc;margin:0 10px 0px 15px}
 .apt_button_margin_left{margin-left:5px !important;}
 
 #apt_box_keyword_name{min-width:50px;width:100%;}

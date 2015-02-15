@@ -2,13 +2,13 @@
 /*
 Plugin Name: Automatic Post Tagger
 Plugin URI: http://wordpress.org/plugins/automatic-post-tagger/
-Description: This plugin uses a list of keywords provided by the user to automatically tag posts according to their title, content and excerpt.
-Version: 1.6
+Description: This plugin uses keywords provided by the user to automatically add tags to posts according to their title, content and excerpt.
+Version: 1.7
 Author: Devtard
 Author URI: http://devtard.com
 License: GPLv2 or later
 
-Copyright (C) 2012-2014 Devtard (gmail.com ID: devtard)
+Copyright (C) 2012-2015 Devtard (gmail.com ID: devtard)
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ defined('ABSPATH') or exit; //prevents direct access to the file
 ## ### BASIC DECLARATIONS
 ## =========================================================================
 
-global $wpdb; //variables used in activation/uninstall functions HAVE TO be declared as global in order to work - see http://codex.wordpress.org/Function_Reference/register_activation_hook#A_Note_on_Variable_Scope
+global $wpdb, $pagenow; //variables used in activation/uninstall functions HAVE TO be declared as global in order to work - see http://codex.wordpress.org/Function_Reference/register_activation_hook#A_Note_on_Variable_Scope; $pagenow is loaded because of the publish/save/insert post hooks
 
 $apt_settings = get_option('automatic_post_tagger');
 
@@ -50,7 +50,7 @@ $apt_message_html_prefix_warning = '<div id="message" class="updated warning"><p
 $apt_message_html_prefix_note = '<div id="message" class="updated note"><p>';
 $apt_message_html_suffix = '</p></div>';
 $apt_invalid_nonce_message = $apt_message_html_prefix_error .'<strong>Error:</strong> Sorry, your nonce did not verify, your request couldn\'t be executed. Please try again.'. $apt_message_html_suffix;
-$apt_max_input_vars_value = ini_get('max_input_vars');
+$apt_max_input_vars_value = @ini_get('max_input_vars');
 
 //$wpdb->show_errors(); //for debugging - TODO: comment before releasing to public
 
@@ -88,7 +88,7 @@ if(is_admin()){ //only if the admin panel is being displayed
 	add_action('wp_ajax_apt_toggle_widget', 'apt_toggle_widget');
 
 	if(isset($pagenow)){
-		if(in_array($pagenow, array('plugins.php', 'update-core.php', 'update.php'))){ //page update-core.php or plugins.php or update.php is being displayed
+		if(in_array($pagenow, array('plugins.php', 'update-core.php', 'update.php')) OR ($pagenow == 'options-general.php' AND isset($_GET['page']) AND $_GET['page'] == 'automatic-post-tagger')){ //the options page, or update-core.php or plugins.php or update.php are being displayed
 			add_action('plugins_loaded', 'apt_update_plugin');
 		}
 	}
@@ -97,12 +97,15 @@ if(is_admin()){ //only if the admin panel is being displayed
 	}
 } //-is_admin
 
-//TODO - should this be executed only in the backend? (maybe it has to be executed everywhere because of scheduled posts)
-if($apt_settings['apt_tagging_hook_type'] == 1){
-	add_action('publish_post','apt_single_post_tagging'); //executes the tagging script after publishing a post
+## When the tagging function should be executed
+if(@$apt_settings['apt_run_apt_publish_post'] == 1 AND isset($pagenow) AND in_array($pagenow, array('post.php', 'post-new.php')) AND @$apt_settings['apt_run_apt_save_post'] != 1){ //this hook IS fired when the post editor is displayed; the function is triggered only once (if tagging posts is allowed when posts are being saved)
+	add_action('publish_post','apt_single_post_tagging'); //executes the tagging function when publishing posts
 }
-else{ //trigger tagging when saving the post
-	add_action('save_post','apt_single_post_tagging'); //executes the tagging script after saving a post
+if(@$apt_settings['apt_run_apt_wp_insert_post'] == 1 AND isset($pagenow) AND !in_array($pagenow, array('post.php', 'post-new.php', 'edit.php'))){ //this hook IS NOT fired when the post editor is displayed (this would result in posts saved via the post editor always being processed by APT)
+	add_action('wp_insert_post','apt_single_post_tagging'); //executes the tagging function when inserting posts
+}
+if(@$apt_settings['apt_run_apt_save_post'] == 1 AND isset($pagenow) AND in_array($pagenow, array('post.php', 'post-new.php')) AND ((isset($_GET['action']) AND $_GET['action'] != 'trash') OR !isset($_GET['action']))){ //this hook IS fired when the post editor is being displayed AND the post is not being trashed
+	add_action('save_post','apt_single_post_tagging'); //executes the tagging function when saving posts
 }
 
 ## ===================================
@@ -138,11 +141,16 @@ function apt_install_plugin(){ //runs only after MANUAL activation! (also used f
 			'apt_search_for_keyword_names' => '1',
 			'apt_search_for_related_words' => '1',
 			'apt_tag_limit' => '20',
-			'apt_tagging_hook_type' => '1',
-			'apt_handling_current_tags' => '1',
-			'apt_handling_current_tags_2_remove_old_tags' => '0',
+			'apt_run_apt_publish_post' => '1',
+			'apt_run_apt_save_post' => '0',
+			'apt_run_apt_wp_insert_post' => '1',
+			'apt_old_tags_handling' => '1',
+			'apt_old_tags_handling_2_remove_old_tags' => '0',
 			'apt_word_separators' => array('.','&#44;',' ','?','!',':',';','\'','"','\\','|','/','(',')','[',']','{','}','_','+','=','-','<','>','~','@','#','$','%','^','&','*'),
 			'apt_ignore_case' => '1',
+			'apt_decode_html_entities_word_separators' => '1',
+			'apt_decode_html_entities_analyzed_content' => '0',
+			'apt_decode_html_entities_related_words' => '0',
 			'apt_strip_tags' => '1',
 			'apt_replace_whitespaces' => '1',
 			'apt_replace_nonalphanumeric' => '0',
@@ -152,6 +160,7 @@ function apt_install_plugin(){ //runs only after MANUAL activation! (also used f
 			'apt_substring_analysis_start' => '0',
 			'apt_wildcards' => '1',
 			'apt_post_types' => array('post'),
+			'apt_post_statuses' => array('publish'),
 			'apt_taxonomy_name' => 'post_tag',
 			'apt_wildcard_character' => '*',
 			'apt_string_separator' => ',',
@@ -160,10 +169,10 @@ function apt_install_plugin(){ //runs only after MANUAL activation! (also used f
 			'apt_create_backup_when_updating' => '1',
 			'apt_stored_backups' => '10',
 			'apt_wildcard_regex' => '(.*)',
-			'apt_keyword_management_mode' => '1',
+			'apt_keyword_editor_mode' => '1',
 			'apt_bulk_tagging_posts_per_cycle' => '15',
-			'apt_bulk_tagging_queue' => array(),
-			'apt_bulk_tagging_statuses' => array('auto-draft','draft', 'future', 'inherit', 'pending', 'trash')
+			'apt_bulk_tagging_delay' => '1',
+			'apt_bulk_tagging_queue' => array()
 		);
 
 		add_option('automatic_post_tagger', $apt_default_settings, '', 'no'); //single option for storing default settings
@@ -171,7 +180,6 @@ function apt_install_plugin(){ //runs only after MANUAL activation! (also used f
 
 	if(get_option('automatic_post_tagger_keywords') == false){ //create the option only if it doesn't exist yet
 		add_option('automatic_post_tagger_keywords', array(), '', 'no'); //single option for storing keywords
-
 	}
 }
 
@@ -219,7 +227,7 @@ function apt_update_plugin(){ //update function - runs when all plugins are load
 
 					//new suboptions
 					$apt_settings['apt_last_keyword_id'] = '0';
-					$apt_settings['apt_handling_current_tags_2_remove_old_tags'] = '0';
+					$apt_settings['apt_old_tags_handling_2_remove_old_tags'] = '0';
 					$apt_settings['apt_post_types'] = array('post');
 					$apt_settings['apt_taxonomy_name'] = 'post_tag';
 					$apt_settings['apt_search_for_keyword_names'] = '1';
@@ -227,12 +235,16 @@ function apt_update_plugin(){ //update function - runs when all plugins are load
 					$apt_settings['apt_input_correction'] = '1';
 					$apt_settings['apt_create_backup_when_updating'] = '1';
 					$apt_settings['apt_wildcard_regex'] = '(.*)';
-					$apt_settings['apt_keyword_management_mode'] = '1';
+					$apt_settings['apt_keyword_editor_mode'] = '1';
 					$apt_settings['apt_keywords_total'] = '0';
+					$apt_settings['apt_bulk_tagging_delay'] = '1';
+					$apt_settings['apt_decode_html_entities_word_separators'] = '1';
+					$apt_settings['apt_decode_html_entities_analyzed_content'] = '0';
+					$apt_settings['apt_decode_html_entities_related_words'] = '0';
 
 					//reset values/change variables to arrays
 					$apt_settings['apt_word_separators'] = array('.','&#44;',' ','?','!',':',';','\'','"','\\','|','/','(',')','[',']','{','}','_','+','=','-','<','>','~','@','#','$','%','^','&','*');
-					$apt_settings['apt_bulk_tagging_statuses'] = array('auto-draft','draft', 'future', 'inherit', 'pending', 'trash');
+					$apt_settings['apt_post_statuses'] = array('publish');
 					$apt_settings['apt_hidden_widgets'] = array();
 					$apt_settings['apt_bulk_tagging_queue'] = array();
 
@@ -289,8 +301,40 @@ function apt_update_plugin(){ //update function - runs when all plugins are load
 					} //-else no errors occurred
 				} //update from 1.5 and 1.5.1
 
-				//if($apt_settings['apt_plugin_version'] == '1.6'){ //update from 1.6 to the newest version - TODO v1.7
-				//}
+				if($apt_settings['apt_plugin_version'] == '1.6'){ //update from 1.6 to the newest version
+					//new suboptions
+					//copying old values to new variables
+					if($apt_settings['apt_tagging_hook_type'] == 1){ 
+						$apt_settings['apt_run_apt_publish_post'] = '1';
+						$apt_settings['apt_run_apt_save_post'] = '0';
+					}
+					else{ //trigger tagging when saving the post
+						$apt_settings['apt_run_apt_save_post'] = '1';
+						$apt_settings['apt_run_apt_publish_post'] = '0';
+					}
+
+					$apt_settings['apt_old_tags_handling'] = $apt_settings['apt_handling_current_tags'];
+					$apt_settings['apt_old_tags_handling_2_remove_old_tags'] = $apt_settings['apt_handling_current_tags_2_remove_old_tags'];
+					$apt_settings['apt_keyword_editor_mode'] = $apt_settings['apt_keyword_management_mode'];
+
+					$apt_settings['apt_run_apt_wp_insert_post'] = '1';
+					$apt_settings['apt_bulk_tagging_delay'] = '1';
+					$apt_settings['apt_post_statuses'] = array('publish');
+					$apt_settings['apt_decode_html_entities_word_separators'] = '1';
+					$apt_settings['apt_decode_html_entities_analyzed_content'] = '0';
+					$apt_settings['apt_decode_html_entities_related_words'] = '0';
+
+					//remove suboptions
+					unset($apt_settings['apt_tagging_hook_type']);
+					unset($apt_settings['apt_bulk_tagging_statuses']);
+					unset($apt_settings['apt_handling_current_tags']);
+					unset($apt_settings['apt_handling_current_tags_2_remove_old_tags']);
+					unset($apt_settings['apt_keyword_management_mode']);
+				}
+
+
+//TODO				if($apt_settings['apt_plugin_version'] == '1.7'){ //update from 1.7 to the newest version
+//				}
 
 				######################################################## 
 				//update the plugin version and update notice
@@ -353,11 +397,16 @@ function apt_update_plugin(){ //update function - runs when all plugins are load
 							'apt_search_for_keyword_names' => '1',
 							'apt_search_for_related_words' => '1',
 							'apt_tag_limit' => '20',
-							'apt_tagging_hook_type' => '1',
-							'apt_handling_current_tags' => '1',
-							'apt_handling_current_tags_2_remove_old_tags' => '0',
+							'apt_run_apt_publish_post' => '1',
+							'apt_run_apt_save_post' => '0',
+							'apt_run_apt_wp_insert_post' => '1',
+							'apt_old_tags_handling' => '1',
+							'apt_old_tags_handling_2_remove_old_tags' => '0',
 							'apt_word_separators' => array('.','&#44;',' ','?','!',':',';','\'','"','\\','|','/','(',')','[',']','{','}','_','+','=','-','<','>','~','@','#','$','%','^','&','*'),
 							'apt_ignore_case' => '1',
+							'apt_decode_html_entities_word_separators' => '1',
+							'apt_decode_html_entities_analyzed_content' => '0',
+							'apt_decode_html_entities_related_words' => '0',
 							'apt_strip_tags' => '1',
 							'apt_replace_whitespaces' => '1',
 							'apt_replace_nonalphanumeric' => '0',
@@ -367,6 +416,7 @@ function apt_update_plugin(){ //update function - runs when all plugins are load
 							'apt_substring_analysis_start' => '0',
 							'apt_wildcards' => '1',
 							'apt_post_types' => array('post'),
+							'apt_post_statuses' => array('publish'),
 							'apt_taxonomy_name' => 'post_tag',
 							'apt_wildcard_character' => '*',
 							'apt_string_separator' => ',',
@@ -375,10 +425,10 @@ function apt_update_plugin(){ //update function - runs when all plugins are load
 							'apt_create_backup_when_updating' => '1',
 							'apt_stored_backups' => '10',
 							'apt_wildcard_regex' => '(.*)',
-							'apt_keyword_management_mode' => '1',
+							'apt_keyword_editor_mode' => '1',
 							'apt_bulk_tagging_posts_per_cycle' => '15',
-							'apt_bulk_tagging_queue' => array(),
-							'apt_bulk_tagging_statuses' => array('auto-draft','draft', 'future', 'inherit', 'pending', 'trash')
+							'apt_bulk_tagging_delay' => '1',
+							'apt_bulk_tagging_queue' => array()
 						);
 
 						add_option('automatic_post_tagger', $apt_new_settings, '', 'no'); //single option for saving default settings
@@ -463,6 +513,7 @@ function apt_plugin_admin_notices(){
 	if(current_user_can('manage_options')){
 		global $pagenow,
 		$apt_message_html_prefix_updated,
+		$apt_message_html_prefix_warning,
 		$apt_message_html_prefix_note,
 		$apt_message_html_suffix;
 
@@ -472,42 +523,49 @@ function apt_plugin_admin_notices(){
 			## ===================================
 			## ### ACTIONS BASED ON GET DATA
 			## ===================================
-			//the following must be here before other conditions; isset checks are required
 
-			if(isset($_GET['n']) AND $_GET['n'] == 1 AND check_admin_referer('apt_admin_notice_install_nonce')){ //install note
+			## the following must be executed before other conditions; isset checks are required
+			if($apt_settings['apt_admin_notice_install'] == 1){ //install note will appear after clicking the link or visiting the options page
 				$apt_settings['apt_admin_notice_install'] = 0; //hide activation notice
 				update_option('automatic_post_tagger', $apt_settings); //save settings
 
-				echo $apt_message_html_prefix_note .'<strong>Note:</strong> Now you need to create (import) a list of keywords that the plugin will use for tagging posts when they are saved/published. You can also use the bulk tagging tool to tag multiple posts at once.'. $apt_message_html_suffix; //display quick info for beginners
+				echo $apt_message_html_prefix_note .'<strong>Note:</strong> Now you need to create or import keywords which will be used by the plugin to automatically tag posts while they are being published, inserted or saved.
+					<ul class="apt_custom_list">
+						<li><em>Keyword names</em> represent tags that will be added to posts when they or their <em>Related words</em> are found.</li>
+						<li><strong>By default only newly published/inserted posts are automatically tagged.</strong> If you want to see the plugin in action when writing new posts or editing drafts, enable the option <em>Run APT when posts are: Saved</em> and add the post status "draft" to <em>Allowed post statuses</em>.</li>
+						<li>You can also use the <em>Bulk tagging tool</em> to process all of your already existing posts.</li>
+					</ul>'. $apt_message_html_suffix; //display quick info for beginners
 			}
 
 			## TODO: each version must have a unique update notice
-			if(isset($_GET['n']) AND $_GET['n'] == 2 AND check_admin_referer('apt_admin_notice_update_nonce')){ //update note
+			if($apt_settings['apt_admin_notice_update'] == 1){ //update note will appear after clicking the link or visiting the options page
 				$apt_settings['apt_admin_notice_update'] = 0; //hide update notice
 				update_option('automatic_post_tagger', $apt_settings); //save settings
 
-				echo $apt_message_html_prefix_note .'<strong>What\'s new in APT v1.6?</strong>
-				<ul class="apt_custom_list">
-				<li>This version supports UTF-8 characters, multicharacter word separators, custom post types, taxonomies and the wildcard regex pattern.</li>
-				<li>To avoid unnecessary confusion, v1.6 uses new terminology to distinguish WP tags from <strong>keywords</strong> created by the user (formerly simply referred to as "tags").</li>
-				<li><strong>Your old word separators and ignored post statuses were reset.</strong></li>
-				<li>Spaces are no longer treated as word separators by default if other word separators are set.</li>
-				<li>If the form sends an empty keyword name field, the keyword and its related words will be removed. If multiple keywords with the same names are being saved, the one processed later will be removed.</li>
-				<li>If the plugin stores a lot keywords in the database and your PHP configuration prevents input fields from being submitted if there\'s too many of them, you can fix this problem by changing the "Keyword management mode" to "Single input field for all keywords" (see <a href="http://wordpress.org/plugins/automatic-post-tagger/faq">FAQ</a> for more information).</li>
-				</ul>
+				echo $apt_message_html_prefix_note .'<strong>What\'s new in APT v1.7?</strong>
+					<ul class="apt_custom_list">
+						<li><strong>Full automation</strong>: APT can now process posts inserted to the database via WP API (this is usually done by autoblogging plugins - RSS importers/aggregators).</li>
+						<li>HTML entities in analyzed content, word separators and related words can be converted to their applicable characters.</li>
+						<li>New option <em>Allowed post statuses</em> replaces previously used <em>Ignored post statuses</em>. Specified post statuses are now always being taken into account, not just when using the Bulk tagging tool.</li>
+						<li>Configurable time delay between cycles when using the Bulk tagging tool.</li>
+						<li>Terms imported from taxonomies can be now saved as related words (with term IDs saved as their keyword names). This is useful when the plugin is used to add categories to posts.</li>
+						<li>And more - see the <a href="https://wordpress.org/plugins/automatic-post-tagger/changelog/">Changelog</a>.</li>
+					</ul>
 
-				<br />If something doesn\'t work, please try to <abbr title="You can use the &quot;Restore default settings&quot; button below">reinstall the plugin</abbr> first. You are always welcome to post a new bug report on the <a href="http://wordpress.org/support/plugin/automatic-post-tagger">support forum</a>.'. $apt_message_html_suffix;
-			} //-update notice
+					<br />If something doesn\'t work, please try to <abbr title="You can use the &quot;Restore default settings&quot; button below">reinstall the plugin</abbr> first. You are always welcome to post new bug reports or your suggestions on the <a href="http://wordpress.org/support/plugin/automatic-post-tagger">support forum</a>.'. $apt_message_html_suffix;
+
+				echo $apt_message_html_prefix_warning .'<strong>Do you like APT and want more frequent updates?</strong> Motivate the developer to speed up the plugin\'s development by <a href="https://www.patreon.com/devtard">becoming his patron on Patreon</a>!'. $apt_message_html_suffix;
+			} //-update notice(s)
 		} //-options page check
 
 		## ===================================
 		## ### ACTIONS BASED ON DB DATA
 		## ===================================
 		if($apt_settings['apt_admin_notice_install'] == 1){ //show link to the setting page after installing
-			echo $apt_message_html_prefix_note .'<strong>Automatic Post Tagger</strong> has been installed. <a href="'. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&n=1'), 'apt_admin_notice_install_nonce') .'">Set up the plugin &raquo;</a>'. $apt_message_html_suffix;
+			echo $apt_message_html_prefix_note .'<strong>Automatic Post Tagger</strong> has been installed. <a href="'. admin_url('options-general.php?page=automatic-post-tagger') .'">Set up the plugin &raquo;</a>'. $apt_message_html_suffix;
 		}
 		if($apt_settings['apt_admin_notice_update'] == 1){ //show link to the setting page after updating
-			echo $apt_message_html_prefix_note .'<strong>Automatic Post Tagger</strong> has been updated to version <strong>'. $apt_settings['apt_plugin_version'] .'</strong>. <a href="'. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&n=2'), 'apt_admin_notice_update_nonce') .'">Find out what\'s new &raquo;</a>'. $apt_message_html_suffix;
+			echo $apt_message_html_prefix_note .'<strong>Automatic Post Tagger</strong> has been updated to version <strong>'. $apt_settings['apt_plugin_version'] .'</strong>. <a href="'. admin_url('options-general.php?page=automatic-post-tagger') .'">Find out what\'s new &raquo;</a>'. $apt_message_html_suffix;
 		}
 	} //-if can manage options check
 }
@@ -582,13 +640,13 @@ function apt_toggle_widget(){ //update widget visibility via AJAX
  		array_push($apt_settings['apt_hidden_widgets'], $_POST['apt_widget_id']); //add the ID at the end of the array
 		update_option('automatic_post_tagger', $apt_settings); //save settings
 	}
-	die; //the AJAX script has to die otherwise it will return exit(0)
+	die; //the AJAX script has to die, otherwise it will return exit(0)
 }
 
 function apt_meta_box_create_new_keyword(){ //save keyword sent via meta box
 	check_ajax_referer('apt_meta_box_nonce', 'security');
 	apt_create_new_keyword($_POST['apt_box_keyword_name'],$_POST['apt_box_keyword_related_words']);
-	die; //the AJAX script has to die otherwise it will return exit(0)
+	die; //the AJAX script has to die, otherwise it will return exit(0)
 }
 
 function apt_meta_box_add(){ //add meta box
@@ -599,11 +657,11 @@ function apt_meta_box_content(){ //meta box content
 	$apt_settings = get_option('automatic_post_tagger');
 ?>
 	<p>
-		Keyword name: <span class="apt_help" title="Example: &quot;cat&quot;">i</span>
+		Keyword name: <span class="apt_help" title="Keyword names represent tags that will be added to posts when they or their Related words are found. Example: &quot;cat&quot;">i</span>
 		<input onkeypress="return apt_enter_submit(event);" type="text" id="apt_box_keyword_name" name="apt_box_keyword_name" value="" maxlength="5000" />
 	</p>
 	<p>
-		Related words (separated by "<strong><?php echo htmlspecialchars($apt_settings['apt_string_separator']); ?></strong>"): <span class="apt_help" title="<?php echo 'Example: &quot;cats'. $apt_settings['apt_string_separator'] .'kitty'. $apt_settings['apt_string_separator'] .'meo'. $apt_settings['apt_wildcard_character'] .'w&quot;. Related words are optional.'; ?>">i</span>
+		Related words (separated by "<strong><?php echo htmlspecialchars($apt_settings['apt_string_separator']); ?></strong>"): <span class="apt_help" title="<?php echo 'Related words are optional. Example: &quot;cats'. $apt_settings['apt_string_separator'] .'kitty'. $apt_settings['apt_string_separator'] .'meo'. $apt_settings['apt_wildcard_character'] .'w&quot;.'; ?>">i</span>
 		<input onkeypress="return apt_enter_submit(event);" type="text" id="apt_box_keyword_related_words" name="apt_box_keyword_related_words" value="" maxlength="5000" />
 	</p>
 	<p>
@@ -705,33 +763,32 @@ function apt_sort_keywords($a, $b){ //case insensitive string comparison of sub-
 	return strnatcasecmp($a[1], $b[1]);
 }
 
-function apt_print_sql_where_without_specified_statuses(){ //this prints part of a SQL command that is used for retrieving post IDs for bulk tagging - it returns IDs of posts without specified post statuses
+function apt_print_sql_where_without_specified_statuses(){ //this prints part of a SQL command that is used for retrieving post IDs for bulk tagging - it returns IDs of posts with specified post statuses
 	global $wpdb;
 
 	$apt_settings = get_option('automatic_post_tagger');
-	$apt_post_table_select_posts_with_defined_statuses_sql = ''; //this variable is here to prevent throwing the notice "Undefined variable"
 
 	//if no post statuses are set, don't add them to the SQL query
-	if(!empty($apt_settings['apt_bulk_tagging_statuses'])){
-		$apt_post_statuses_sql = ''; //this declaration is here to prevent throwing the notice "Undefined variable"
+	if(empty($apt_settings['apt_post_statuses'])){
+		return "WHERE 1=0 "; //disable any further changes, as there are no allowed post types.
+	}
+	else{
+		$apt_post_statuses_escaped = ''; //this is here to prevent the notice "Undefined variable"
 
 		//adding all post statuses to a variable
-		foreach($apt_settings['apt_bulk_tagging_statuses'] as $apt_post_status){
-		    $apt_post_statuses_sql .= 'post_status != '. $wpdb->prepare('%s', $apt_post_status) .' AND '; //add array values to a string and separate them by " AND "
+		foreach($apt_settings['apt_post_statuses'] as $apt_post_status){
+			$apt_post_statuses_escaped .= $wpdb->prepare('%s', $apt_post_status) . ','; //add array values to a string and separate them by a comma
 		}
 
-		//now we need to remove the last " AND " part from the end of the string
-		$apt_post_statuses_sql = substr($apt_post_statuses_sql, 0, -5);
-
-		//this is the final part that will be added to the SQL query
-		$apt_post_table_select_posts_with_defined_statuses_sql = "AND ($apt_post_statuses_sql)";
+		//now we need to remove the last "," part from the end of the string
+		$apt_post_statuses_escaped_sql = substr($apt_post_statuses_escaped, 0, -1);
 	}
 
 	if(empty($apt_settings['apt_post_types'])){
 		return "WHERE 1=0 "; //disable any further changes, as there are no allowed post types.
 	}
 	else{
-		$apt_post_types_escaped = '';
+		$apt_post_types_escaped = ''; //this is here to prevent the notice "Undefined variable"
 
 		//adding all post types to a variable
 		foreach($apt_settings['apt_post_types'] as $apt_post_type){
@@ -742,8 +799,9 @@ function apt_print_sql_where_without_specified_statuses(){ //this prints part of
 		$apt_post_types_escaped_sql = substr($apt_post_types_escaped, 0, -1);
 
 		//get all IDs with set post statuses and types
-		return 'WHERE post_type IN ('. $apt_post_types_escaped_sql .') '. $apt_post_table_select_posts_with_defined_statuses_sql;
 	}
+
+	return 'WHERE post_type IN ('. $apt_post_types_escaped_sql .') AND post_status IN ('. $apt_post_statuses_escaped_sql .')';
 }
 
 function apt_get_backup_file_name(){ //provide unique name of a new backup file
@@ -755,11 +813,11 @@ function apt_get_backup_file_name(){ //provide unique name of a new backup file
 	if(is_dir($apt_backup_dir_rel_path)){
 		$apt_file_permissions = intval(substr(sprintf('%o', fileperms($apt_backup_dir_rel_path)), -4));
 		if($apt_file_permissions != 755){ //check whether the directory permissions aren't 755
-			chmod($apt_backup_dir_rel_path, 0755); //change permissions
+			@chmod($apt_backup_dir_rel_path, 0755); //change permissions
 		} //permissions lower than X
 	} //directory exists
 	else{ //directory doesn't exist
-		mkdir($apt_backup_dir_rel_path, 0755); //create the directory
+		@mkdir($apt_backup_dir_rel_path, 0755); //create the directory
 	}
 
 	if(chdir($apt_backup_dir_rel_path)){ //continue only if the current directory can be changed to the backup directory
@@ -971,29 +1029,53 @@ function apt_bulk_tagging(){ //adds tags to multiple posts
 	$apt_settings = get_option('automatic_post_tagger');
 	$apt_ids_for_dosage_bulk_tagging_array_sliced = array_slice($apt_settings['apt_bulk_tagging_queue'], 0, $apt_settings['apt_bulk_tagging_posts_per_cycle']); //get first X elements from the array
 
-	//determine the number of total tags added to posts
-	if(isset($_GET['tt'])){
-		$apt_total_number_of_added_tags = $_GET['tt'];
-	}
-	else{
-		$apt_total_number_of_added_tags = 0;
-	}
-
 	echo '<!-- Automatic Post Tagger -->';
 	echo $apt_message_html_prefix_note .'<strong>Note:</strong> Bulk tagging is currently in progress. This may take some time.'. $apt_message_html_suffix;
 	echo '<ul class="apt_custom_list">';
 
+	//determine the number of already processed posts
+	if(isset($_GET['pp'])){
+		$apt_number_of_already_processed_posts = $_GET['pp'];
+	}
+	else{
+		$apt_number_of_already_processed_posts = 0;
+	}
+
+	//determine the number of total tags added to posts
+	if(isset($_GET['tt'])){
+		$apt_number_of_added_tags_total = $_GET['tt'];
+	}
+	else{
+		$apt_number_of_added_tags_total = 0;
+	}
+
+	//determine the number of affected posts
+	if(isset($_GET['ap'])){
+		$apt_number_of_affected_posts = $_GET['ap'];
+	}
+	else{
+		$apt_number_of_affected_posts = 0;
+	}
+
 	//run loop to process selected number of posts from the range
 	foreach($apt_ids_for_dosage_bulk_tagging_array_sliced as $apt_post_id){
-		$apt_number_of_added_tags = apt_single_post_tagging($apt_post_id, 1, 1); //send the current post ID + send '1' to let the script know that we do not want to check mistake scenarios again + send 1 to return number of added tags
-		$apt_total_number_of_added_tags += $apt_number_of_added_tags; //add up currently assigned tags to the variable
+		$apt_number_of_added_tags = apt_single_post_tagging($apt_post_id, 1, 1); //send the current post ID + send '1' to let the function know that we do not want to check mistake scenarios again + send 1 to return number of added tags
+		$apt_number_of_added_tags_total += $apt_number_of_added_tags; //add up currently assigned tags to the variable
+		$apt_number_of_already_processed_posts++; //increase the number of processed posts
+
+		if($apt_number_of_added_tags != 0){
+			$apt_number_of_affected_posts++;
+		}
 
 		unset($apt_settings['apt_bulk_tagging_queue'][array_search($apt_post_id, $apt_settings['apt_bulk_tagging_queue'])]); //remove the id from the array
-		echo '<li><strong>Post ID '. $apt_post_id .':</strong> '. $apt_number_of_added_tags .' tags added</li>';
+		echo '<li><a href="'. admin_url('post.php?post='. $apt_post_id .'&action=edit') .'">Post ID '. $apt_post_id .'</a>: '. $apt_number_of_added_tags .' tags added</li>';
 	}
+
 	echo '</ul>';
-	echo '<p><strong>Total number of tags added to posts:</strong> '. $apt_total_number_of_added_tags .'<br>';
-	echo '<strong>Remaining post IDs in the queue:</strong> '. implode(', ', $apt_settings['apt_bulk_tagging_queue']) .'</p>';
+	echo '<p><strong>Already processed posts:</strong> '. $apt_number_of_already_processed_posts .'<br />';
+	echo '<strong>Tags added to posts:</strong> '. $apt_number_of_added_tags_total .'<br />';
+	echo '<strong>Affected posts:</strong> '. $apt_number_of_affected_posts .'</p>';
+	echo '<p><strong>Posts in the queue:</strong> '. count($apt_settings['apt_bulk_tagging_queue']) .'</p>';
 	echo '<!-- //-Automatic Post Tagger -->';
 
 	//save remaining IDs to the option
@@ -1002,17 +1084,17 @@ function apt_bulk_tagging(){ //adds tags to multiple posts
 	//if there are not any IDs in the queue, redirect the user to a normal page
 	if(empty($apt_settings['apt_bulk_tagging_queue'])){
 		echo '<!-- Automatic Post Tagger (no post IDs in the queue) -->';
-		echo '<p><small>(<a href="'. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=0&tt='. $apt_total_number_of_added_tags), 'apt_bulk_tagging_0_nonce') .'">Click here</a> if the automatic page redirection doesn\'t seem to be working.)</small></p>'; //display an alternative link if methods below fail
-		echo '<script>window.location.href=\''. str_replace('&amp;', '&', wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=0&tt='. $apt_total_number_of_added_tags), 'apt_bulk_tagging_0_nonce')) .'\'</script>'; //the str_replace function is here because the wp_nonce_url function provides &amp; instead of &, so I need to replace it or the web browser won't redirect anything
-		echo '<noscript><meta http-equiv="refresh" content="0;url='. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=0&tt='. $apt_total_number_of_added_tags), 'apt_bulk_tagging_0_nonce') .'"></noscript>'; //if JS is disabled, use the meta tag
+		echo '<p><small>This page should be automatically refreshed in '. $apt_settings['apt_bulk_tagging_delay'] .' seconds. <a href="'. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=0&pp='. $apt_number_of_already_processed_posts .'&tt='. $apt_number_of_added_tags_total .'&ap='. $apt_number_of_affected_posts), 'apt_bulk_tagging_0_nonce') .'">Click here if that doesn\'t happen &raquo;</a></small></p>'; //display an alternative link if methods below fail
+		echo '<script type="text/javascript">setTimeout(function(){window.location.replace("'. str_replace('&amp;', '&', wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=0&pp='. $apt_number_of_already_processed_posts .'&tt='. $apt_number_of_added_tags_total .'&ap='. $apt_number_of_affected_posts), 'apt_bulk_tagging_0_nonce')) .'")}, '. $apt_settings['apt_bulk_tagging_delay']*1000 .')</script>'; //the str_replace function is here because the wp_nonce_url function provides &amp; instead of &, so I need to replace it or the web browser won't redirect anything; the number of seconds has to be multiplied by 1000 here
+		echo '<noscript><meta http-equiv="refresh" content="'. $apt_settings['apt_bulk_tagging_delay'] .';url='. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=0&pp='. $apt_number_of_already_processed_posts .'&tt='. $apt_number_of_added_tags_total .'&ap='. $apt_number_of_affected_posts), 'apt_bulk_tagging_0_nonce') .'"></noscript>'; //if JS is disabled, use the meta tag
 		echo '<!-- //-Automatic Post Tagger -->';
 		exit;
 	}
 	else{ //if there are still some IDs in the queue, redirect to the same page (and continue tagging)
 		echo '<!-- Automatic Post Tagger (some post IDs in the queue) -->';
-		echo '<p><small>(<a href="'. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1&tt='. $apt_total_number_of_added_tags), 'apt_bulk_tagging_1_nonce') .'">Click here</a> if the automatic page redirection doesn\'t seem to be working.)</small></p>'; //display an alternative link if methods below fail
-		echo '<script>window.location.href=\''. str_replace('&amp;', '&', wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1&tt='. $apt_total_number_of_added_tags), 'apt_bulk_tagging_1_nonce')) .'\'</script>'; //the str_replace function is here because the wp_nonce_url function provides &amp; instead of &, so I need to replace it or the web browser won't redirect anything
-		echo '<noscript><meta http-equiv="refresh" content="0;url='. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1&tt='. $apt_total_number_of_added_tags), 'apt_bulk_tagging_1_nonce') .'"></noscript>'; //if JS is disabled, use the meta tag
+		echo '<p><small>This page should be automatically refreshed in '. $apt_settings['apt_bulk_tagging_delay'] .' seconds. <a href="'. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1&pp='. $apt_number_of_already_processed_posts .'&tt='. $apt_number_of_added_tags_total .'&ap='. $apt_number_of_affected_posts), 'apt_bulk_tagging_1_nonce') .'">Click here if that doesn\'t happen &raquo;</a></small></p>'; //display an alternative link if methods below fail
+		echo '<script type="text/javascript">setTimeout(function(){window.location.replace("'. str_replace('&amp;', '&', wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1&pp='. $apt_number_of_already_processed_posts .'&tt='. $apt_number_of_added_tags_total .'&ap='. $apt_number_of_affected_posts), 'apt_bulk_tagging_1_nonce')) .'")}, '. $apt_settings['apt_bulk_tagging_delay']*1000 .')</script>'; //the str_replace function is here because the wp_nonce_url function provides &amp; instead of &, so I need to replace it or the web browser won't redirect anything; the number of seconds has to be multiplied by 1000 here
+		echo '<noscript><meta http-equiv="refresh" content="'. $apt_settings['apt_bulk_tagging_delay'] .';url='. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1&pp='. $apt_number_of_already_processed_posts .'&tt='. $apt_number_of_added_tags_total .'&ap='. $apt_number_of_affected_posts), 'apt_bulk_tagging_1_nonce') .'"></noscript>'; //if JS is disabled, use the meta tag
 		echo '<!-- //-Automatic Post Tagger -->';
 		exit;
 	}
@@ -1022,12 +1104,11 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 	global $wpdb;
 
 	$apt_settings = get_option('automatic_post_tagger');
-
-	$apt_post_current_tags = wp_get_post_terms($apt_post_id, $apt_settings['apt_taxonomy_name'], array("fields" => "names"));
+	$apt_post_current_tags = wp_get_post_terms($apt_post_id, $apt_settings['apt_taxonomy_name'], array('fields' => 'names'));
 	$apt_post_current_tag_count = count($apt_post_current_tags);
 
 	#################################################################
-	//stopping execution to prevent the script from doing unuseful job:
+	//stopping execution to prevent the function from doing unuseful job:
 
 	//we do not have the ID of the post, stop!
 	if ($apt_post_id == false OR $apt_post_id == null){
@@ -1041,13 +1122,16 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 	if(!in_array(get_post_type($apt_post_id), $apt_settings['apt_post_types'])){
 		return 8;
 	}
-
+	//the current post status isn't allowed, stop!
+	if(!in_array(get_post_status($apt_post_id), $apt_settings['apt_post_statuses'])){
+		return 10;
+	}
 	//the user does not want us to add tags if the post already has some tags, stop!
-	if(($apt_post_current_tag_count > 0) AND $apt_settings['apt_handling_current_tags'] == 3){
+	if(($apt_post_current_tag_count > 0) AND $apt_settings['apt_old_tags_handling'] == 3){
 		return 2;
 	}
 	//number of current tags is the same or greater than the maximum so we can't append tags, stop! (replacement is ok, 3rd option won't be let here)
-	if(($apt_post_current_tag_count >= $apt_settings['apt_tag_limit']) AND $apt_settings['apt_handling_current_tags'] == 1){
+	if(($apt_post_current_tag_count >= $apt_settings['apt_tag_limit']) AND $apt_settings['apt_old_tags_handling'] == 1){
 		return 3;
 	}
 
@@ -1098,6 +1182,9 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 	if($apt_settings['apt_strip_tags'] == 1){
 		$apt_haystack_string = wp_strip_all_tags($apt_haystack_string); //remove HTML, PHP and JS tags
 	}
+	if($apt_settings['apt_decode_html_entities_analyzed_content'] == 1){
+		$apt_haystack_string = html_entity_decode($apt_haystack_string); //decode HTML entities
+	}
 	if($apt_settings['apt_replace_nonalphanumeric'] == 1){
 		$apt_haystack_string = preg_replace('/[^a-zA-Z0-9]/', ' ', $apt_haystack_string); //replace all non-alphanumeric-characters with spaces
 	}
@@ -1110,7 +1197,7 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 
 
 	//determine if we should calculate the number of max. tags for a post - only when appending tags
-	if($apt_settings['apt_handling_current_tags'] == 1){
+	if($apt_settings['apt_old_tags_handling'] == 1){
 		$apt_tags_to_add_max = $apt_settings['apt_tag_limit'] - $apt_post_current_tag_count;
 	}
 	else{
@@ -1118,26 +1205,29 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 	}
 
 //die($apt_haystack_string); //for debugging
-
+//die(var_dump($apt_settings['apt_word_separators'])); //for debugging
 
 	if(!empty($apt_settings['apt_word_separators'])){ //continue only if separators are set
 		$apt_word_separators_separated = '';
 
 		//generate a string of WORD SEPARATORS separated by "|"
 		foreach($apt_settings['apt_word_separators'] as $apt_word_separator){
-			$apt_word_separators_separated .= preg_quote(html_entity_decode($apt_word_separator), '/') .'|'; //add "|" ("OR") between the letters, escaping those characters needing escaping; html_entity_decode turns every HTML entity into applicable characters
-		}
+			if($apt_settings['apt_decode_html_entities_word_separators'] == 1){ //html_entity_decode turns every HTML entity into applicable characters
+				$apt_word_separators_separated .= preg_quote(html_entity_decode($apt_word_separator), '/') .'|'; //add "|" ("OR") between the letters, escaping those characters needing escaping
+			}
+			else{
+				$apt_word_separators_separated .= preg_quote($apt_word_separator, '/') .'|'; //add "|" ("OR") between the letters, escaping those characters needing escaping
+			}
+		} //-foreach
 		$apt_word_separators_separated = substr($apt_word_separators_separated, 0, -1); //remove the last extra "|" character
 //die($apt_word_separators_separated); //for debugging
 	} //-if separators set
-
 
 	//this variable is below all the previous conditions to avoid loading keywords to memory when it's unnecessary
 	$apt_keywords_array = get_option('automatic_post_tagger_keywords'); 
 
 	## SEARCH FOR A SINGLE KEYWORD AND ITS RELATED WORDS
 	foreach($apt_keywords_array as $apt_keyword_array_value){ //loop handling every keyword in the DB
-
 		//resetting variables - this must not be omitted
 		$apt_keyword_found = 0;
 		$apt_related_words_found = 0;
@@ -1151,9 +1241,13 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 				$apt_keyword_array_value_substrings = explode($apt_settings['apt_string_separator'], $apt_keyword_array_value[2]); //create an array with related words divided by separators
 				for($i=0; $i < $apt_keyword_array_related_words_count; $i++){ //loop handling substrings in the 'related_words' column - $i must be 0 because arrays always begin with 0!
 
-					## preparing the substring needle for search (note: HTML tags are not being stripped in needles)
+					## preparing the substring needle for search (note: HTML tags in needles are not being stripped)
 					$apt_substring_needle = $apt_keyword_array_value_substrings[$i];
 					$apt_substring_wildcard = $apt_settings['apt_wildcard_character'];
+
+					if($apt_settings['apt_decode_html_entities_related_words'] == 1){
+						$apt_substring_needle = html_entity_decode($apt_substring_needle);
+					}
 
 					//lowercase strings
 					if($apt_settings['apt_ignore_case'] == 1){
@@ -1162,11 +1256,11 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 					}
 
 					if($apt_settings['apt_replace_nonalphanumeric'] == 1){
-						if($apt_settings['apt_dont_replace_wildcards'] == 1){ //don't replace wildcards so that they would work
-							$apt_substring_needle = preg_replace('/[^a-zA-Z0-9'. preg_quote($apt_substring_wildcard, '/') .']/', ' ', $apt_substring_needle); //replace all non-alphanumeric characters (except for wildcards) with spaces
+						if($apt_settings['apt_dont_replace_wildcards'] == 1){ //don't replace wildcards
+							$apt_substring_needle = preg_replace('/[^a-zA-Z0-9'. preg_quote($apt_substring_wildcard, '/') .']/', ' ', $apt_substring_needle);
 						}
 						else{ //wildcards won't work
-							$apt_substring_needle = preg_replace('/[^a-zA-Z0-9]/', ' ', $apt_substring_needle); //replace all non-alphanumeric-characters with spaces
+							$apt_substring_needle = preg_replace('/[^a-zA-Z0-9]/', ' ', $apt_substring_needle); //replace all non-alphanumeric characters with spaces
 						}
 					}
 
@@ -1206,7 +1300,7 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 
 					} //-if separators are set OR non-alphanumeric searching is disabled
 					## SPACE SEPARATORS
-					else{ //if no separators are set OR the user does wants to replace non-alphanumeric characters with spaces, continue searching (needles with spaces before and after every keyword)
+					else{ //if no separators are set OR the user does want to replace non-alphanumeric characters with spaces, continue searching (needles with spaces before and after every keyword)
 						//wildcard search for related words
 						if($apt_settings['apt_wildcards'] == 1){ //run if wildcards are allowed
 							$apt_substring_needle_final = '/ '. $apt_substring_needle_wildcards .' /';
@@ -1227,14 +1321,14 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 			} //-if for related words check
 		} //if the user wants to search for related words
 
-//die("keyword found: ".$apt_related_words_found ."<br><br>needle: ". $apt_substring_needle_final ."<br><br>text:<br><br>". $apt_haystack_string ); //for debugging
+//die("keyword found: ".$apt_related_words_found ."<br /><br />needle: ". $apt_substring_needle_final ."<br /><br />text:<br /><br />". $apt_haystack_string ); //for debugging
 
 		if($apt_settings['apt_search_for_keyword_names'] == 1){ //search for keyword names only
 			## KEYWORD NAMES
 			if($apt_related_words_found == 0){ //search for keywords ONLY when NO related words were found
 //die("no substring was found, now we search for keyword names"); //for debugging
 
-				## preparing the needle for search (note: HTML tags are not being stripped in needles)
+				## preparing the needle for search (note: HTML tags in needles are not being stripped)
 				$apt_keyword_needle = $apt_keyword_array_value[1];
 
 				if($apt_settings['apt_ignore_case'] == 1){
@@ -1253,7 +1347,7 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 
 					if(preg_match($apt_keyword_needle_final, $apt_haystack_string)){ //'XtagX' found
 						$apt_keyword_found = 1; //set variable to 1
-//die("keywords '". $apt_keyword_needle ."' found with separators '". print_r($apt_settings['apt_word_separators']) .'\'<br><br>analyzed content: <br><br>'. $apt_haystack_string); //for debugging
+//die("keywords '". $apt_keyword_needle ."' found with separators '". print_r($apt_settings['apt_word_separators']) .'\'<br /><br />analyzed content: <br /><br />'. $apt_haystack_string); //for debugging
 					}
 				} //-if separators are set ANd non-alphanumeric searching disabled
 				## SPACE SEPARATORS
@@ -1268,17 +1362,17 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 		} //if the user wants to search for keyword names
 
 
-//die("keyword: ". $apt_keyword_array_value[1] ."<br>needle: ". $apt_keyword_needle); //for debugging
+//die("keyword: ". $apt_keyword_array_value[1] ."<br />needle: ". $apt_keyword_needle); //for debugging
 
 		## ADDING FOUND KEYWORDS TO AN ARRAY
 		if($apt_related_words_found == 1 OR $apt_keyword_found == 1){ //keyword or one of related_words found, add the keyword to array!
-//die("keyword: ". $apt_keyword_array_value[1] ."<br>rw found: ".$apt_related_words_found ."<br> keyword found: ".  $apt_keyword_found); //for debugging
+//die("keyword: ". $apt_keyword_array_value[1] ."<br />rw found: ".$apt_related_words_found ."<br /> keyword found: ".  $apt_keyword_found); //for debugging
 
 			//we need to check whether the keyword isn't already in the array of the current tags (don't worry about the temporary array for adding tags, only unique values are pushed in)	
-			if($apt_settings['apt_handling_current_tags'] == 2 OR $apt_post_current_tag_count == 0){ //if we want to replace tags, we don't need to check whether the tag is already added to a post (it will be added again after deleting the old tags if it's found)
+			if($apt_settings['apt_old_tags_handling'] == 2 OR $apt_post_current_tag_count == 0){ //if we want to replace tags, we don't need to check whether the tag is already added to a post (it will be added again after deleting the old tags if it's found)
 				array_push($apt_found_keywords_to_be_added_array, $apt_keyword_array_value[1]); //add keyword to the array
 
-//die("keyword:". $apt_keyword_array_value[1] ."<br>current tags: ". print_r($apt_found_keywords_to_be_added_array, true)); //for debugging
+//die("keyword:". $apt_keyword_array_value[1] ."<br />current tags: ". print_r($apt_found_keywords_to_be_added_array, true)); //for debugging
 			}
 			else{ //if we are appending tags, avoid adding duplicate items to the array by checking whether they're already there
 				if(in_array($apt_keyword_array_value[1], $apt_post_current_tags) == false){
@@ -1287,68 +1381,40 @@ function apt_single_post_tagging($apt_post_id, $apt_dont_check_mistake_scenarios
 			}
 		} //-if keyword found
 
-//die("keyword:". $apt_keyword_needle ."<br>rw needle: ". $apt_substring_needle ."<br>rw found: ". $apt_related_words_found."<br>kexword found: " .$apt_keyword_found); //for debugging
+//die("keyword:". $apt_keyword_needle ."<br />rw needle: ". $apt_substring_needle ."<br />rw found: ". $apt_related_words_found."<br />kexword found: " .$apt_keyword_found); //for debugging
 
 		if(count($apt_found_keywords_to_be_added_array) == $apt_tags_to_add_max){ //check whether the array is equal to the max. number of tags per one post, break the loop
 			break; //stop the loop, the max. number of tags was reached
 		}
 	} //-foreach
 
-//die("max: ".$apt_settings['apt_tag_limit'] ."<br>current tags: ". $apt_post_current_tag_count . "<br>max for this post: " .$apt_tags_to_add_max. "<br>current tags: ". print_r($apt_found_keywords_to_be_added_array, true)); //for debugging
-//die("analyzed content:<br><br>". $apt_haystack_string ."<br><br>found tags:<br><br>". print_r($apt_found_keywords_to_be_added_array)); //for debugging
+//die("max: ".$apt_settings['apt_tag_limit'] ."<br />current tags: ". $apt_post_current_tag_count . "<br />max for this post: " .$apt_tags_to_add_max. "<br />current tags: ". print_r($apt_found_keywords_to_be_added_array, true)); //for debugging
+//die("analyzed content:<br /><br />". $apt_haystack_string ."<br /><br />found tags:<br /><br />". print_r($apt_found_keywords_to_be_added_array)); //for debugging
 
 	$apt_number_of_found_keywords = count($apt_found_keywords_to_be_added_array);
 
 	## ADDING TAGS TO THE POST
-	if($apt_settings['apt_handling_current_tags'] == 1 OR $apt_settings['apt_handling_current_tags'] == 3){ //if the post has no tags, we should add them - if it has some, it won't pass one of the first conditions in the function if $apt_settings['apt_handling_current_tags'] == 3
+	if($apt_settings['apt_old_tags_handling'] == 1 OR $apt_settings['apt_old_tags_handling'] == 3){ //if the post has no tags, we should add them - if it has some, it won't pass one of the first conditions in the function if $apt_settings['apt_old_tags_handling'] == 3
 		wp_set_post_terms($apt_post_id, $apt_found_keywords_to_be_added_array, $apt_settings['apt_taxonomy_name'], true); //append tags
 	}
-	if($apt_settings['apt_handling_current_tags'] == 2){
+	if($apt_settings['apt_old_tags_handling'] == 2){
 		if($apt_number_of_found_keywords > 0){ //if the plugin found some tags (keywords), replace the old ones - otherwise do not continue!
 			wp_set_post_terms($apt_post_id, $apt_found_keywords_to_be_added_array, $apt_settings['apt_taxonomy_name'], false); //replace tags
 		}
 		else{ //no new tags (keywords) were found
-			if(($apt_settings['apt_handling_current_tags_2_remove_old_tags'] == 1) AND ($apt_post_current_tag_count > 0)){ //if no new tags were found and there are old tags, remove them all
+			if(($apt_settings['apt_old_tags_handling_2_remove_old_tags'] == 1) AND ($apt_post_current_tag_count > 0)){ //if no new tags were found and there are old tags, remove them all
 				wp_delete_object_term_relationships($apt_post_id, $apt_settings['apt_taxonomy_name']); //remove all tags
 			}
 		} //else no keywords found
 	} //if the user wants to replace old tags
 
-//die("current tags: ". print_r($apt_post_current_tags, true) . "<br>array to add: ". print_r($apt_found_keywords_to_be_added_array, true) ."<br>delete old tags checkbox: ". $apt_settings['apt_handling_current_tags_2_remove_old_tags'] . "<br>current number of tags: ". $apt_post_current_tag_count); //for debugging
+//die("current tags: ". print_r($apt_post_current_tags, true) . "<br />array to add: ". print_r($apt_found_keywords_to_be_added_array, true) ."<br />delete old tags checkbox: ". $apt_settings['apt_old_tags_handling_2_remove_old_tags'] . "<br />current number of tags: ". $apt_post_current_tag_count); //for debugging
 
 	//return number of added tags if needed
 	if($apt_return_number_of_added_tags == 1){
 		return $apt_number_of_found_keywords;
 	} //-return number of added tags
 } //-end of tagging function
-
-## ===================================
-## ### MISCELLANEOUS FUNCTIONS
-## ===================================
-
-function apt_is_plugin_installed($apt_plugin_name, $apt_install_from_zip = 0){
-	$apt_currently_installed_plugins = get_plugins(); //retrieve all installed plugins
-	$apt_plugin_installed = 0;
-
-	foreach($apt_currently_installed_plugins as $apt_installed_plugin => $apt_plugin_data){
-		if($apt_plugin_data['Name'] == $apt_plugin_name){ //check whether there is a plugin with the same name provided in the argument
-			$apt_plugin_installed = 1;
-			break;
-		} //-if plugin installed
-	} //-foreach
-
-	if($apt_plugin_installed == 1){ //plugin installed
-		return '<span class="apt_already_installed">Installed</span>';
-	}
-	else{ //plugin not installed
-		if($apt_install_from_zip == 1){ //plugin must be uploaded
-			return '<a href="'. admin_url('plugin-install.php?tab=upload') .'" title="Install plugin from .zip file">Install now</a>';
-		}
-		else{ //plugin can be downloaded from the official repository
-			return '<a href="'. admin_url('plugin-install.php?tab=search&type=term&s=&quot;'. $apt_plugin_name .'&quot;') .'" title="Install plugin from official repository">Install now</a>';
-		}
-	} //-else plugin installed
-}
 
 ## =========================================================================
 ## ### OPTIONS PAGE
@@ -1372,7 +1438,7 @@ function apt_options_page(){ //loads options page
 ?>
 
 <div class="wrap">
-<div id="icon-options-general" class="icon32"><br></div>
+<div id="icon-options-general" class="icon32"><br /></div>
 <h2>Automatic Post Tagger</h2>
 
 <?php
@@ -1384,10 +1450,10 @@ function apt_options_page(){ //loads options page
 if(isset($_GET['bt'])){
 	if($_GET['bt'] == 0 AND check_admin_referer('apt_bulk_tagging_0_nonce')){
 		if(empty($apt_settings['apt_bulk_tagging_queue'])){
-			echo $apt_message_html_prefix_updated .'Bulk tagging complete. <strong>'. $_GET['tt'] .'</strong> tags total have been added to your posts.'. $apt_message_html_suffix;
+			echo $apt_message_html_prefix_updated .'Bulk tagging complete. APT has processed <strong>'. $_GET['pp'] .'</strong> posts and added <strong>'. $_GET['tt'] .'</strong> tags total to <strong>'. $_GET['ap'] .'</strong> posts.'. $apt_message_html_suffix;
 		}
 		else{
-			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The bulk tagging queue isn\'t empty. (Remaining post IDs in the queue: '. implode(', ', $apt_settings['apt_bulk_tagging_queue']) .')'. $apt_message_html_suffix;
+			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The bulk tagging queue isn\'t empty. (Still unprocessed posts: '. count($apt_settings['apt_bulk_tagging_queue']) .')'. $apt_message_html_suffix;
 		}
 	}
 	if($_GET['bt'] == 1 AND check_admin_referer('apt_bulk_tagging_1_nonce')){
@@ -1420,6 +1486,7 @@ if($apt_max_input_vars_value != false){ //make sure the value isn't false
 		} //if warning messages allowed
 	} //-else limit wasn't exceeded
 }//if value is integer
+
 ## ===================================
 ## ### OPTIONS SAVING
 ## ===================================
@@ -1433,9 +1500,15 @@ if(isset($_POST['apt_save_settings_button'])){ //saving all settings
 		$apt_settings['apt_excerpt'] = (isset($_POST['apt_excerpt'])) ? '1' : '0';
 		$apt_settings['apt_search_for_keyword_names'] = (isset($_POST['apt_search_for_keyword_names'])) ? '1' : '0';
 		$apt_settings['apt_search_for_related_words'] = (isset($_POST['apt_search_for_related_words'])) ? '1' : '0';
-		$apt_settings['apt_handling_current_tags'] = $_POST['apt_handling_current_tags'];
-		$apt_settings['apt_handling_current_tags_2_remove_old_tags'] = (isset($_POST['apt_handling_current_tags_2_remove_old_tags'])) ? '1' : '0';
+		$apt_settings['apt_old_tags_handling'] = $_POST['apt_old_tags_handling'];
+		$apt_settings['apt_old_tags_handling_2_remove_old_tags'] = (isset($_POST['apt_old_tags_handling_2_remove_old_tags'])) ? '1' : '0';
+		$apt_settings['apt_run_apt_publish_post'] = (isset($_POST['apt_run_apt_publish_post'])) ? '1' : '0';
+		$apt_settings['apt_run_apt_save_post'] = (isset($_POST['apt_run_apt_save_post'])) ? '1' : '0';
+		$apt_settings['apt_run_apt_wp_insert_post'] = (isset($_POST['apt_run_apt_wp_insert_post'])) ? '1' : '0';
 		$apt_settings['apt_ignore_case'] = (isset($_POST['apt_ignore_case'])) ? '1' : '0';
+		$apt_settings['apt_decode_html_entities_word_separators'] = (isset($_POST['apt_decode_html_entities_word_separators'])) ? '1' : '0';
+		$apt_settings['apt_decode_html_entities_analyzed_content'] = (isset($_POST['apt_decode_html_entities_analyzed_content'])) ? '1' : '0';
+		$apt_settings['apt_decode_html_entities_related_words'] = (isset($_POST['apt_decode_html_entities_related_words'])) ? '1' : '0';
 		$apt_settings['apt_strip_tags'] = (isset($_POST['apt_strip_tags'])) ? '1' : '0';
 		$apt_settings['apt_replace_whitespaces'] = (isset($_POST['apt_replace_whitespaces'])) ? '1' : '0';
 		$apt_settings['apt_replace_nonalphanumeric'] = (isset($_POST['apt_replace_nonalphanumeric'])) ? '1' : '0';
@@ -1444,42 +1517,61 @@ if(isset($_POST['apt_save_settings_button'])){ //saving all settings
 		$apt_settings['apt_wildcards'] = (isset($_POST['apt_wildcards'])) ? '1' : '0';
 		$apt_settings['apt_input_correction'] = (isset($_POST['apt_input_correction'])) ? '1' : '0';
 		$apt_settings['apt_create_backup_when_updating'] = (isset($_POST['apt_create_backup_when_updating'])) ? '1' : '0';
-		$apt_settings['apt_tagging_hook_type'] = $_POST['apt_tagging_hook_type'];
 		$apt_settings['apt_warning_messages'] = (isset($_POST['apt_warning_messages'])) ? '1' : '0';
-		$apt_settings['apt_keyword_management_mode'] = $_POST['apt_keyword_management_mode'];
+		$apt_settings['apt_keyword_editor_mode'] = $_POST['apt_keyword_editor_mode'];
 
-		if(empty($_POST['apt_word_separators'])){ //this prevents the explode function from saving an empty [0] item in the array if no word separators are set
+		//these variables need to be stripslashed
+		$apt_stripslashed_string_separator = stripslashes($_POST['apt_string_separator']);
+		$apt_stripslashed_word_separators = stripslashes($_POST['apt_word_separators']);
+		$apt_stripslashed_post_types = stripslashes($_POST['apt_post_types']);
+		$apt_stripslashed_post_statuses = stripslashes($_POST['apt_post_statuses']);
+
+		if(empty($apt_stripslashed_word_separators)){ //this prevents the explode function from saving an empty [0] item in the array if no word separators are set
 			$apt_settings['apt_word_separators'] = array();
 			echo $apt_message_html_prefix_note .'<strong>Note:</strong> No word separators were specified; a space will be used as a default word separator.'. $apt_message_html_suffix;
 		}
 		else{
 			//user input adjustment
 			if($apt_settings['apt_input_correction'] == 1){
-				$apt_word_separators_trimmed = trim($_POST['apt_word_separators'], $_POST['apt_string_separator']);
-				$apt_word_separators_trimmed = preg_replace('/('. preg_quote($_POST['apt_string_separator'], '/') .'){2,}/', $_POST['apt_string_separator'], $apt_word_separators_trimmed); //replace multiple occurrences of the current string separator with one
-				$apt_settings['apt_word_separators'] = explode($apt_settings['apt_string_separator'], stripslashes($apt_word_separators_trimmed)); //when exploding, we need to use the currently used ($_POST) apt_string_separator, otherwise the separators won't be exploded
+				$apt_word_separators_trimmed = trim(trim($apt_stripslashed_word_separators, $apt_stripslashed_string_separator), $apt_settings['apt_string_separator']);
+				$apt_word_separators_trimmed = preg_replace('/('. preg_quote($apt_stripslashed_string_separator, '/') .'){2,}/', $apt_stripslashed_string_separator, $apt_word_separators_trimmed); //replace multiple occurrences of the current string separator with one
+				$apt_settings['apt_word_separators'] = explode($apt_settings['apt_string_separator'], $apt_word_separators_trimmed); //when exploding, we need to use the currently used ($apt_settings) apt_string_separator in word separators, otherwise the separators won't be exploded
 			} //-user input adjustment
 			else{
-				$apt_settings['apt_word_separators'] = explode($apt_settings['apt_string_separator'], stripslashes($_POST['apt_word_separators'])); //when exploding, we need to use the currently used ($_POST) apt_string_separator, otherwise the separators won't be exploded
+				$apt_settings['apt_word_separators'] = explode($apt_settings['apt_string_separator'], $apt_stripslashed_word_separators); //when exploding, we need to use the currently used ($apt_settings) apt_string_separator in word separators, otherwise the separators won't be exploded
 			} //-else user input adjustments
 		} //-else empty word separator
 
-
-		if(empty($_POST['apt_post_types'])){
+		if(empty($apt_stripslashed_post_types)){
 			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_post_types" couldn\'t be saved, because the sent value was empty.'. $apt_message_html_suffix;
 		}
 		else{
 			//user input adjustment
 			if($apt_settings['apt_input_correction'] == 1){
-				$apt_post_types_trimmed = trim(trim($_POST['apt_post_types'], $_POST['apt_string_separator']));
-				$apt_post_types_trimmed = preg_replace('/('. preg_quote($_POST['apt_string_separator'], '/') .'){2,}/', $_POST['apt_string_separator'], $apt_post_types_trimmed); //replace multiple occurrences of the current string separator with one
+				$apt_post_types_trimmed = trim(trim($apt_stripslashed_post_types, $apt_stripslashed_string_separator));
+				$apt_post_types_trimmed = preg_replace('/('. preg_quote($apt_stripslashed_string_separator, '/') .'){2,}/', $apt_stripslashed_string_separator, $apt_post_types_trimmed); //replace multiple occurrences of the current string separator with one
 				$apt_settings['apt_post_types'] = explode($apt_settings['apt_string_separator'], $apt_post_types_trimmed);
 			} //-user input adjustment
 			else{
-				$apt_settings['apt_post_types'] = explode($apt_settings['apt_string_separator'], $_POST['apt_post_types']);
+				$apt_settings['apt_post_types'] = explode($apt_settings['apt_string_separator'], $apt_stripslashed_post_types);
 			} //-else user input adjustments
 		} //-else empty post types
 
+		if(empty($apt_stripslashed_post_statuses)){
+			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_post_statuses" couldn\'t be saved, because the sent value was empty.'. $apt_message_html_suffix;
+		}
+		else{
+			//-user input adjustment
+			if($apt_settings['apt_input_correction'] == 1){
+				$apt_post_statuses_trimmed = trim(trim($apt_stripslashed_post_statuses, $apt_settings['apt_string_separator']));
+				$apt_post_statuses_trimmed = preg_replace('/'. preg_quote($apt_settings['apt_string_separator'], '/') .'{2,}/', $apt_settings['apt_string_separator'], $apt_post_statuses_trimmed); //replacing multiple separators with one
+				$apt_post_statuses_trimmed = preg_replace(array('/\s{2,}/', '/[\t\n]/'), '', $apt_post_statuses_trimmed); //removing whitespace characters
+				$apt_settings['apt_post_statuses'] = explode($apt_settings['apt_string_separator'], $apt_post_statuses_trimmed);
+			} //-user input adjustment
+			else{
+				$apt_settings['apt_post_statuses'] = explode($apt_settings['apt_string_separator'], $apt_stripslashed_post_statuses);
+			} //-else user input adjustment
+		} //-else empty post statuses
 
 		if(empty($_POST['apt_taxonomy_name'])){
 			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_taxonomy_name" couldn\'t be saved, because the sent value was empty.'. $apt_message_html_suffix;
@@ -1507,7 +1599,6 @@ if(isset($_POST['apt_save_settings_button'])){ //saving all settings
 			}
 		} //else empty regex
 
-
 		//making sure that people won't save rubbish in the DB
 		if(is_numeric($_POST['apt_substring_analysis_length']) AND is_int((int)$_POST['apt_substring_analysis_length'])){ //value must be numeric and integer
 			$apt_settings['apt_substring_analysis_length'] = (int)$_POST['apt_substring_analysis_length']; //we must not forget to save the CONVERTED variable
@@ -1524,75 +1615,84 @@ if(isset($_POST['apt_save_settings_button'])){ //saving all settings
 		}
 
 		if(ctype_digit($_POST['apt_tag_limit'])){ //value must be natural
-			$apt_settings['apt_tag_limit'] = $_POST['apt_tag_limit'];
+			$apt_settings['apt_tag_limit'] = (int)$_POST['apt_tag_limit'];
 		}
 		else{
 			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_tag_limit" couldn\'t be saved, because the sent value wasn\'t natural.'. $apt_message_html_suffix;
 		}
 
 		if(ctype_digit($_POST['apt_stored_backups'])){ //value must be natural
-			$apt_settings['apt_stored_backups'] = $_POST['apt_stored_backups'];
+			$apt_settings['apt_stored_backups'] = (int)$_POST['apt_stored_backups'];
 		}
 		else{
 			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_stored_backups" couldn\'t be saved, because the sent value wasn\'t natural.'. $apt_message_html_suffix;
 		}
 
 		//the string separator must not be empty
-		if(!empty($_POST['apt_string_separator'])){
+		if(!empty($apt_stripslashed_string_separator)){
 			//the string separator must not contain the wildcard character
-			if(strstr($_POST['apt_string_separator'], $_POST['apt_wildcard_character'])){
+			if(strstr($apt_stripslashed_string_separator, $_POST['apt_wildcard_character'])){
 				echo $apt_message_html_prefix_error .'<strong>Error:</strong> The new string separator couldn\'t be saved, because the sent value contained the wildcard character. Use something else, please.'. $apt_message_html_suffix;
 			}
 			else{ //the string doesn't contain the string separator
 				if($apt_settings['apt_warning_messages'] == 1){ //display warnings
 					//the string separator is not a comma
-					if($_POST['apt_string_separator'] != ','){ //don't display when non-comma character was submitted
-						echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The option "apt_string_separator" has been set to "<strong>'. htmlspecialchars($_POST['apt_string_separator']) .'</strong>". Using a comma instead is recommended.'. $apt_message_html_suffix;
+					if($apt_stripslashed_string_separator != ','){ //don't display when non-comma character was submitted
+						echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The string separator has been set to "<strong>'. htmlspecialchars($apt_stripslashed_string_separator) .'</strong>". Using a comma instead is recommended.'. $apt_message_html_suffix;
+
+						if($apt_stripslashed_string_separator == ';'){ //don't display when a semicolon separator was submitted
+							echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> You can\'t use HTML entities as word separators when a semicolon is used as a string separator.'. $apt_message_html_suffix;
+						}
 					}
 				} //-if warnings allowed
 
 				//if the string separator has been changed, inform the user about changing the separator in all related words (replacing separators elsewhere is not necessary if arrays are used)
-				if($_POST['apt_string_separator'] != $apt_settings['apt_string_separator']){
+				if($apt_stripslashed_string_separator != $apt_settings['apt_string_separator']){
 
 					//replacing old separators in cells with related words with the new value
 					$apt_keyword_separator_replacement_id = 0;
 					//replace separators via a foreach
 					foreach($apt_keywords_array as $apt_key){
 						if (strstr($apt_key[2],$apt_settings['apt_string_separator'])){
-							$apt_keywords_array[$apt_keyword_separator_replacement_id][2] = str_replace($apt_settings['apt_string_separator'], $_POST['apt_string_separator'], $apt_key[2]);
+							$apt_keywords_array[$apt_keyword_separator_replacement_id][2] = str_replace($apt_settings['apt_string_separator'], $apt_stripslashed_string_separator, $apt_key[2]);
 						}
 						$apt_keyword_separator_replacement_id++; //this incrementor must be placed AFTER the replacement function
 					}
 					update_option('automatic_post_tagger_keywords', $apt_keywords_array); //save keywords with new separators
 
-					echo $apt_message_html_prefix_note .'<strong>Note:</strong> All old string separators ("<strong>'. htmlspecialchars($apt_settings['apt_string_separator']) .'</strong>") have been changed to new values ("<strong>'. htmlspecialchars($_POST['apt_string_separator']) .'</strong>").'. $apt_message_html_suffix;
+					echo $apt_message_html_prefix_note .'<strong>Note:</strong> All old string separators ("<strong>'. htmlspecialchars($apt_settings['apt_string_separator']) .'</strong>") have been changed to new values ("<strong>'. htmlspecialchars($apt_stripslashed_string_separator) .'</strong>").'. $apt_message_html_suffix;
 
-					if($apt_settings['apt_warning_messages'] == 1){ //display warnings
-						//if the new separator happens to be the same as one of the word separators, inform the user that they should replace the separator with a HTML entity
-						if(in_array($_POST['apt_string_separator'], $apt_settings['apt_word_separators'])){
-
+					if(in_array($apt_stripslashed_string_separator, $apt_settings['apt_word_separators'])){
+							//if the new separator happens to be the same as one of the word separators, delete it and inform the user that they should add the separator as a HTML entity
 							if($apt_settings['apt_input_correction'] == 1){
-								echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The new string separator ("<strong>'. htmlspecialchars($_POST['apt_string_separator']) .'</strong>") is already used as a word separator. If you don\'t replace this word separator with its applicable HTML entity, it will be automatically removed the next time you save the plugin settings.'. $apt_message_html_suffix;
+								$apt_word_separators_trimmed = implode($apt_stripslashed_string_separator, $apt_settings['apt_word_separators']); //we are trimming imploded word separators saved as an array several lines above (TODO: make this more effective?)
+								$apt_word_separators_trimmed = trim(preg_replace('/('. preg_quote($apt_stripslashed_string_separator, '/') .'){2,}/', $apt_stripslashed_string_separator, $apt_word_separators_trimmed), $apt_stripslashed_string_separator); //replace multiple occurrences of the current string separator with one
+								$apt_settings['apt_word_separators'] = explode($apt_settings['apt_string_separator'], $apt_word_separators_trimmed); //when exploding, we need to use the currently used ($apt_settings) apt_string_separator in word separators, otherwise the separators won't be exploded
+
+								if($apt_settings['apt_warning_messages'] == 1){ //display warnings
+									echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The new string separator ("<strong>'. htmlspecialchars($apt_stripslashed_string_separator) .'</strong>") is already used as a word separator; the word separator "<strong>'. htmlspecialchars($apt_stripslashed_string_separator) .'</strong>" thus has been automatically removed. To prevent its automatic removal in the future, add this word separator again using its HTML entity.'. $apt_message_html_suffix;
+								} //-if warnings allowed
 							}
 							else{
-								echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The new string separator ("<strong>'. htmlspecialchars($_POST['apt_string_separator']) .'</strong>") is already used as a word separator. If you don\'t replace this word separator with its applicable HTML entity or remove redundant string separators, APT will treat the non-existent characters between these string separators as word separators, which will result in non-relevant tags being added to your posts.'. $apt_message_html_suffix;
+								if($apt_settings['apt_warning_messages'] == 1){ //display warnings
+									echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The new string separator ("<strong>'. htmlspecialchars($apt_stripslashed_string_separator) .'</strong>") is already used as a word separator. If you don\'t replace this word separator with its applicable HTML entity or remove redundant string separators, APT will treat the non-existent characters between these string separators as word separators, which might result in non-relevant tags being added to your posts.'. $apt_message_html_suffix;
+								} //-if warnings allowed
+
 							} //-input correction
-						} //-if separator is the same as one of word separators
-					} //-if warnings allowed
+					} //-if separator is the same as one of word separators
 				} //-separator was changed
 
-				$apt_settings['apt_string_separator'] = $_POST['apt_string_separator']; //this line MUST be under the current/old separator check!
+				$apt_settings['apt_string_separator'] = $apt_stripslashed_string_separator; //this line MUST be under the current/old separator check!
 			} //-else doesn't contain the wildcard character
 		} //-if not empty
 		else{
 			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_string_separator" couldn\'t be saved, because the sent value was empty.'. $apt_message_html_suffix;
 		}
 
-
 		//the wildcard must not be empty
 		if(!empty($_POST['apt_wildcard_character'])){
 			//the wildcard must not contain the string separator
-			if(strstr($_POST['apt_wildcard_character'], $_POST['apt_string_separator'])){
+			if(strstr($_POST['apt_wildcard_character'], $apt_stripslashed_string_separator)){
 				echo $apt_message_html_prefix_error .'<strong>Error:</strong> The new wildcard character couldn\'t be saved, because the sent value contained the string separator. Use something else, please.'. $apt_message_html_suffix;
 			}
 			else{ //the string doesn't contain the string separator
@@ -1638,21 +1738,27 @@ if(isset($_POST['apt_save_settings_button'])){ //saving all settings
 		if($apt_settings['apt_warning_messages'] == 1){ //display warnings
 			//warn the user if the string separator is repeated multiple times in the option apt_word_separators while input correction is disabled
 			if($apt_settings['apt_input_correction'] == 0){
-				if(preg_match('/('. preg_quote($apt_settings['apt_string_separator'], '/') .'){2,}/', $_POST['apt_word_separators'])){
-					echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> Your word separators contain multiple string separators in a row. If you don\'t remove them, APT will treat the non-existent characters between them as word separators, which will result in non-relevant tags being added to your posts.'. $apt_message_html_suffix;
+				if(preg_match('/('. preg_quote($apt_settings['apt_string_separator'], '/') .'){2,}/', $apt_stripslashed_word_separators)){
+					echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> Your word separators contain multiple string separators in a row. If you don\'t remove them, APT will treat the non-existent characters between them as word separators, which might result in non-relevant tags being added to your posts.'. $apt_message_html_suffix;
 				}
 			} //-input correction disabled
 
-			//warn the user if the taxonomy doesn't exist
-			if(!taxonomy_exists($apt_settings['apt_taxonomy_name'])){
-				echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The taxonomy "<strong>'. htmlspecialchars($_POST['apt_taxonomy_name']) .'</strong>" doesn\'t exist.'. $apt_message_html_suffix;
-			}
 			//warn the user if the specified post types doesn't exist
 			foreach($apt_settings['apt_post_types'] as $apt_post_type){
 				if(!post_type_exists($apt_post_type)){
 					echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The post type "<strong>'. htmlspecialchars($apt_post_type) .'</strong>" doesn\'t exist.'. $apt_message_html_suffix;
 				}
-			}
+			} //-foreach
+			//warn the user if the specified post statuses doesn't exist
+			foreach($apt_settings['apt_post_statuses'] as $apt_post_status){
+				if(!in_array($apt_post_status, array('publish', 'future', 'draft', 'pending', 'private', 'trash', 'auto-draft', 'inherit'))){
+					echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The post status "<strong>'. htmlspecialchars($apt_post_status) .'</strong>" is not one of the default statuses used by WP.'. $apt_message_html_suffix; //we always display this warning, because the user should see it, even if they don't want warnings to be displayed
+				}
+			} //-foreach
+			//warn the user if the taxonomy doesn't exist
+			if(!taxonomy_exists($apt_settings['apt_taxonomy_name'])){
+				echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The taxonomy "<strong>'. htmlspecialchars($_POST['apt_taxonomy_name']) .'</strong>" doesn\'t exist.'. $apt_message_html_suffix;
+			} //-if
 
 			//warn users about the inability to add tags
 			if(($apt_settings['apt_title'] == 0 AND $apt_settings['apt_content'] == 0 AND $apt_settings['apt_excerpt'] == 0) OR ($apt_settings['apt_substring_analysis'] == 1 AND $apt_settings['apt_substring_analysis_length'] == 0)){
@@ -1663,6 +1769,9 @@ if(isset($_POST['apt_save_settings_button'])){ //saving all settings
 			}
 			if($apt_settings['apt_tag_limit'] == 0){
 				echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The plugin isn\'t allowed add any tags.'. $apt_message_html_suffix;
+			}
+			if($apt_settings['apt_run_apt_publish_post'] == 0 AND $apt_settings['apt_run_apt_save_post'] == 0 AND $apt_settings['apt_run_apt_wp_insert_post'] == 0){
+				echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The plugin isn\'t allowed to automatically process posts.'. $apt_message_html_suffix;
 			}
 
 			//warn the user about ignored word separators
@@ -1775,7 +1884,7 @@ if(isset($_POST['apt_delete_chosen_keywords_button'])){ //delete chosen keywords
 
 if(isset($_POST['apt_save_keywords_button'])){ //saving changed keywords
 	if(wp_verify_nonce($_POST['apt_save_keywords_hash'],'apt_save_keywords_nonce')){ //save only if the nonce was verified
-		if($apt_settings['apt_keyword_management_mode'] == 1){ //if KMM =1
+		if($apt_settings['apt_keyword_editor_mode'] == 1){ //if KEM =1
 			$apt_keywords_array_new = array(); //all keywords will be saved into this variable
 
 			foreach($_POST['apt_keywordlist_keyword_'] as $apt_id => $apt_value){ //saving related words ($apt_value is necessary here)
@@ -1802,7 +1911,7 @@ if(isset($_POST['apt_save_keywords_button'])){ //saving changed keywords
 						$apt_new_saved_related_words = ''; //this variable makes sure that related words are submitted as an empty string if they're not submitted
 
 						if(!empty($apt_saved_related_words)){ //the sent value is NOT empty
-							//-user input adjustment
+							//user input adjustment
 							if($apt_settings['apt_input_correction'] == 1){
 								$apt_new_saved_related_words = preg_replace(array('/\s{2,}/', '/[\t\n]/'), ' ', $apt_saved_related_words); //replacing multiple whitespace characters with a space (if there were, say two spaces between words, this will convert them to one)
 								$apt_new_saved_related_words = preg_replace('/'. preg_quote($apt_settings['apt_string_separator'], '/') .'{2,}/', $apt_settings['apt_string_separator'], $apt_new_saved_related_words); //replacing multiple separators with one
@@ -1854,10 +1963,10 @@ if(isset($_POST['apt_save_keywords_button'])){ //saving changed keywords
 					echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> Your related words contain the wildcard character, but wildcard support is currently disabled!'. $apt_message_html_suffix;
 				}
 			} //-if warnings allowed
-		} //-if KMM =1
-		else{ //else KMM =1
+		} //-if KEM =1
+		else{ //else KEM =1
 			apt_import_keywords_from_textarea($_POST['apt_keywords_textarea']);
-		} //-else KMM =1
+		} //-else KEM =1
 	} //-nonce check
 	else{ //the nonce is invalid
 		die($apt_invalid_nonce_message);
@@ -1872,26 +1981,52 @@ if(isset($_POST['apt_import_from_database_button'])){ //import keywords from dat
 	if(wp_verify_nonce($_POST['apt_import_from_database_hash'],'apt_import_from_database_nonce')){ //save only if the nonce was verified
 
 		$apt_keywords_array_new = $apt_keywords_array; //all keywords will be saved into this variable which also includes old keywords
-		$apt_retrieve_existing_taxonomy_sql = 'SELECT name FROM '. $wpdb->terms .' NATURAL JOIN '. $wpdb->term_taxonomy .' WHERE taxonomy="'. $apt_settings['apt_taxonomy_name'] .'"'; //select all existing tags
+
+			if($_POST['apt_import_from_database_column'] == 1){ //select only the term name if the user wants to import terms as keyword names, otherwise select also the ID
+				$apt_retrieve_existing_taxonomy_sql = 'SELECT name FROM '. $wpdb->terms .' NATURAL JOIN '. $wpdb->term_taxonomy .' WHERE taxonomy="'. $apt_settings['apt_taxonomy_name'] .'"'; //select all existing tags
+			}
+			else{
+				$apt_retrieve_existing_taxonomy_sql = 'SELECT term_id, name FROM '. $wpdb->terms .' NATURAL JOIN '. $wpdb->term_taxonomy .' WHERE taxonomy="'. $apt_settings['apt_taxonomy_name'] .'"'; //select all existing tags
+			} //-else
+
 		$apt_retrieve_existing_taxonomy_results = $wpdb->get_results($apt_retrieve_existing_taxonomy_sql, ARRAY_N); //ARRAY_N - result will be output as a numerically indexed array of numerically indexed arrays. 
 		$apt_currently_imported_keywords = 0; //this will be used to determine how many keywrds were imported
-
 		$apt_new_keyword_id = $apt_settings['apt_last_keyword_id']; //the id value MUST NOT be increased here - it is increased in the loop
 
 		foreach($apt_retrieve_existing_taxonomy_results as $apt_taxonomy_array){ //run loop to process all rows
 			$apt_to_be_created_keyword_already_exists = 0; //variable for determining whether the taxonomy item exists
 			foreach($apt_keywords_array_new as $apt_key){ //process all elements of the array
-				if(strtolower($apt_key[1]) == strtolower($apt_taxonomy_array[0])){ //checking whether the strtolowered keyword already exists in the DB
-					$apt_to_be_created_keyword_already_exists = 1;
-					break; //stop the loop
+				//duplicity check
+				if($_POST['apt_import_from_database_column'] == 1){
+					if(strtolower($apt_key[1]) == strtolower($apt_taxonomy_array[0])){ //checking whether the strtolowered term already exists in the DB
+						$apt_to_be_created_keyword_already_exists = 1;
+						break; //stop the loop
+					}
 				}
+				else{
+					if(strtolower($apt_key[1]) == $apt_taxonomy_array[0]){ //checking whether the term ID already exists in the DB
+						$apt_to_be_created_keyword_already_exists = 1;
+						break; //stop the loop
+					}
+				} //-else duplicity check
 			} //-foreach
 
-			if($apt_to_be_created_keyword_already_exists == 0){ //add the taxonomy item only if it doesn't exist yet
-				$apt_new_keyword_id++; //increase the id value
-				array_push($apt_keywords_array_new, array($apt_new_keyword_id, $apt_taxonomy_array[0], '')); //we are not inserting any related words because there aren't any associated with them - we are importing already existing tags
-				$apt_currently_imported_keywords++;
-			} //if-add keyword
+			//adding terms from taxonomy as keyword names
+			if($_POST['apt_import_from_database_column'] == 1){
+				if($apt_to_be_created_keyword_already_exists == 0){ //add the taxonomy item only if it doesn't exist yet
+					$apt_new_keyword_id++; //increase the id value
+					array_push($apt_keywords_array_new, array($apt_new_keyword_id, $apt_taxonomy_array[0], '')); //we are not inserting any related words because there aren't any associated with them - we are importing terms only
+					$apt_currently_imported_keywords++;
+				} //if-add keyword
+			}
+			else{ //adding terms from taxonomy as related words
+				if($apt_to_be_created_keyword_already_exists == 0){ //add the taxonomy item only if it doesn't exist yet
+					$apt_new_keyword_id++; //increase the id value
+					array_push($apt_keywords_array_new, array($apt_new_keyword_id, $apt_taxonomy_array[0], $apt_taxonomy_array[1])); //we are importing terms as related words and their IDs as keyword names
+					$apt_currently_imported_keywords++;
+				} //if-add related words
+			} //-else
+
 		} //-foreach
 
 		if($apt_currently_imported_keywords != 0){ //we have imported something!
@@ -2016,42 +2151,8 @@ if(isset($_POST['apt_export_to_file_button'])){ //creating backup
 
 if(isset($_POST['apt_bulk_tagging_button'])){
 	if(wp_verify_nonce($_POST['apt_bulk_tagging_hash'],'apt_bulk_tagging_nonce')){ //save only if the nonce was verified
-		if(!empty($_POST['apt_bulk_tagging_statuses'])){
-			//-user input adjustment
-			if($apt_settings['apt_input_correction'] == 1){
-				$apt_post_statuses_trimmed = trim(trim($_POST['apt_bulk_tagging_statuses'], $apt_settings['apt_string_separator']));
-				$apt_post_statuses_trimmed = preg_replace('/'. preg_quote($apt_settings['apt_string_separator'], '/') .'{2,}/', $apt_settings['apt_string_separator'], $apt_post_statuses_trimmed); //replacing multiple separators with one
-				$apt_post_statuses_trimmed = preg_replace(array('/\s{2,}/', '/[\t\n]/'), '', $apt_post_statuses_trimmed); //removing whitespace characters
-				$apt_settings['apt_bulk_tagging_statuses'] = explode($apt_settings['apt_string_separator'], $apt_post_statuses_trimmed);
-			} //-user input adjustment
-			else{
-				$apt_settings['apt_bulk_tagging_statuses'] = explode($apt_settings['apt_string_separator'], $_POST['apt_bulk_tagging_statuses']);
-			} //-else user input adjustment
+		### stopping execution to prevent the function from doing unuseful job:
 
-			//warn the user if the specified post statuses doesn't exist
-			foreach($apt_settings['apt_bulk_tagging_statuses'] as $apt_post_status){ //the $apt_settings variable is used here instead of $_POST; the POST data have been already saved there
-				if(!in_array($apt_post_status, array('published', 'future', 'draft', 'pending', 'private', 'trash', 'auto-draft', 'inherit'))){
-					echo $apt_message_html_prefix_warning .'<strong>Warning:</strong> The post status "<strong>'. htmlspecialchars($apt_post_status) .'</strong>" is not one of default statuses used by WP.'. $apt_message_html_suffix;
-				}
-			} //-foreach
-		} //-if empty
-		else{
-			$apt_settings['apt_bulk_tagging_statuses'] = array();
-		}
-
-		update_option('automatic_post_tagger', $apt_settings); //save settings
-
-		#################################################################
-		### stopping execution to prevent the script from doing unuseful job:
-
-		if(ctype_digit($_POST['apt_bulk_tagging_posts_per_cycle'])){ //value must be natural
-			$apt_settings['apt_bulk_tagging_posts_per_cycle'] = $_POST['apt_bulk_tagging_posts_per_cycle'];
-			update_option('automatic_post_tagger', $apt_settings); //save settings
-		}
-		else{
-			$apt_bulk_tagging_error = 1;
-			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_bulk_tagging_posts_per_cycle" couldn\'t be saved, because the sent value wasn\'t natural.'. $apt_message_html_suffix;
-		}
 		if(!ctype_digit($_POST['apt_bulk_tagging_range_1']) OR !ctype_digit($_POST['apt_bulk_tagging_range_2'])){ //value must be natural
 			$apt_bulk_tagging_error = 1;
 			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_bulk_tagging_queue" couldn\'t be saved, because the sent values weren\'t natural.'. $apt_message_html_suffix;
@@ -2060,6 +2161,22 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 			$apt_bulk_tagging_error = 1;
 			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_bulk_tagging_range_1" can\'t be higher than "apt_bulk_tagging_range_2".'. $apt_message_html_suffix;
 		}
+		if(ctype_digit($_POST['apt_bulk_tagging_posts_per_cycle']) AND $_POST['apt_bulk_tagging_posts_per_cycle'] != 0){ //value must be natural and not zero
+			$apt_settings['apt_bulk_tagging_posts_per_cycle'] = (int)$_POST['apt_bulk_tagging_posts_per_cycle'];
+		}
+		else{
+			$apt_bulk_tagging_error = 1;
+			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_bulk_tagging_posts_per_cycle" couldn\'t be saved, because the sent value wasn\'t natural or nonzero.'. $apt_message_html_suffix;
+		}
+		if(ctype_digit($_POST['apt_bulk_tagging_delay'])){ //value must be natural
+			$apt_settings['apt_bulk_tagging_delay'] = (int)$_POST['apt_bulk_tagging_delay'];
+		}
+		else{
+			$apt_bulk_tagging_error = 1;
+			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The option "apt_bulk_tagging_delay" couldn\'t be saved, because the sent value wasn\'t natural.'. $apt_message_html_suffix;
+		}
+
+		update_option('automatic_post_tagger', $apt_settings); //save settings
 
 		### mistake scenarios
 		//there are not any keywords to add, stop!
@@ -2080,14 +2197,12 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 		//the user does not want us to search anything, stop!
 		if($apt_settings['apt_title'] == 0 AND $apt_settings['apt_content'] == 0 AND $apt_settings['apt_excerpt'] == 0){
 			$apt_bulk_tagging_error = 1;
-			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The script isn\'t allowed to analyze any content.'. $apt_message_html_suffix;
+			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The plugin isn\'t allowed to analyze any content.'. $apt_message_html_suffix;
 		}
 		//the user does not want us to process 0 characters, stop!
 		if($apt_settings['apt_substring_analysis'] == 1 AND $apt_settings['apt_substring_analysis_length'] == 0){
 			$apt_bulk_tagging_error = 1;
-			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The script isn\'t allowed to analyze any content.'. $apt_message_html_suffix;
-
-
+			echo $apt_message_html_prefix_error .'<strong>Error:</strong> The plugin isn\'t allowed to analyze any content.'. $apt_message_html_suffix;
 		}
 		#################################################################
 
@@ -2123,10 +2238,12 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 
 					echo $apt_message_html_prefix_note .'<strong>Note:</strong> Bulk tagging is currently in progress. This may take some time.'. $apt_message_html_suffix;
 					echo '<!-- Automatic Post Tagger -->'; //no &bt in the URL, no tagging happened yet, some post IDs are in the queue
-					echo '<p><small>(<a href="'. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1'), 'apt_bulk_tagging_1_nonce') .'">Click here</a>  if the automatic page redirection doesn\'t seem to be working.)</small></p>'; //display an alternative link if methods below fail
-					echo '<script>window.location.href=\''. str_replace('&amp;', '&', wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1'), 'apt_bulk_tagging_1_nonce')) .'\'</script>'; //the str_replace function is here because the wp_nonce_url function provides &amp; instead of &, so I need to replace it or the web browser won't redirect anything
-					echo '<noscript><meta http-equiv="refresh" content="0;url='. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1'), 'apt_bulk_tagging_1_nonce') .'"></noscript>'; //if use the meta tag to refresh the page
+					echo '<p><strong>Posts in the queue:</strong> '. count($apt_ids_for_bulk_tagging_array) .'</p>'; //display number of posts in queue
+					echo '<p><small>This page should be automatically refreshed in '. $apt_settings['apt_bulk_tagging_delay'] .' seconds. <a href="'. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1'), 'apt_bulk_tagging_1_nonce') .'">Click here if that doesn\'t happen &raquo;</a></small></p>'; //display an alternative link if methods below fail
+					echo '<script type="text/javascript">setTimeout(function(){window.location.replace("'. str_replace('&amp;', '&', wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1'), 'apt_bulk_tagging_1_nonce')) .'")}, '. $apt_settings['apt_bulk_tagging_delay']*1000 .')</script>'; //the str_replace function is here because the wp_nonce_url function provides &amp; instead of &, so I need to replace it or the web browser won't redirect anything; the number of seconds has to be multiplied by 1000 here
+					echo '<noscript><meta http-equiv="refresh" content="'. $apt_settings['apt_bulk_tagging_delay'] .';url='. wp_nonce_url(admin_url('options-general.php?page=automatic-post-tagger&bt=1'), 'apt_bulk_tagging_1_nonce') .'"></noscript>'; //if use the meta tag to refresh the page
 					echo '<!-- //-Automatic Post Tagger -->';
+					exit;
 				}
 			}
 		} //-if for no errors found
@@ -2162,56 +2279,47 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 			<div class="postbox">
 				<h3 class="hndle"><span>Do you like the plugin?</span></h3>
 				<div class="inside">
-					<p>If you find this plugin useful, please rate it or consider donating to support further development.</p>
+					<p>If you find this plugin useful, please rate it or consider donating to support its further development.</p>
 						<ul>
-							<li><a href="http://wordpress.org/support/view/plugin-reviews/automatic-post-tagger"><span class="apt_icon apt_rate"></span>Rate plugin at WordPress.org</a></li>
-							<li><a href="http://devtard.com/donate"><span class="apt_icon apt_btc"></span>Donate Bitcoins</a></li>
+							<li><a href="http://wordpress.org/support/view/plugin-reviews/automatic-post-tagger"><span class="apt_icon apt_rate"></span>Rate the plugin on WordPress.org</a></li>
+							<li><a href="https://www.patreon.com/devtard"><span class="apt_icon apt_patreon"></span>Become a patron on Patreon</a></li>
 						</ul>
-					<p>Thank you.</p>
+					<p>Thanks!</p>
 				</div>
 			</div><!-- //-postbox -->
 
-			<!-- postbox -->
-			<div class="postbox">
-				<h3 class="hndle"><span>Devtard's other plugins</span></h3>
-				<div class="inside">
-					<ul>
-						<li><a href="http://wordpress.org/plugins/automatic-post-date-filler/"><span class="apt_icon apt_wp"></span>Automatic Post Date Filler</a>
-							<span class="apt_right"><small>[<?php echo apt_is_plugin_installed('Automatic Post Date Filler'); ?>]</small></span>
-						</li>
-
-						<li><a href="http://devtard.com/?p=727"><span class="apt_icon apt_wp"></span>Debug Mode Changer</a>
-							<span class="apt_right"><small>[<?php echo apt_is_plugin_installed('Debug Mode Changer', 1); ?>]</small></span>
-						</li>
-
-					</ul>
-				</div>
-			</div><!-- //-postbox -->
 		</div><!-- //-side-sortables -->
 	</div><!-- //-inner-sidebar -->
-
 
 	<div class="has-sidebar sm-padded">
 		<div id="post-body-content" class="has-sidebar-content">
 			<div class="meta-box-sortabless">
-			<!-- happy editing! -->
 
 				<!-- postbox -->
 				<form action="<?php echo admin_url('options-general.php?page=automatic-post-tagger'); ?>" method="post">
 				<div class="postbox">
-					<div onclick="apt_toggle_widget(1);" class="handlediv" title="Click to toggle"><br></div>
+					<div onclick="apt_toggle_widget(1);" class="handlediv" title="Click to toggle"><br /></div>
 					<h3 class="hndle"><span>Settings</span></h3>
-					<!-- the style="" parameter printed by PHP must not be removed or togglable widgets will stop working -->
-					<div class="inside" id="apt_widget_id_[1]" <?php echo apt_change_widget_visibility(1); ?>>
 
+					<div class="inside" id="apt_widget_id_[1]" <?php echo apt_change_widget_visibility(1); ?>>
 						<table class="form-table">
 							<tr valign="top">
 								<th scope="row">
-									Analyzed content: <span class="apt_help" title="APT will look for keywords and their related words in selected areas.">i</span>
+									Run APT when posts are: <span class="apt_help" title="These options determine when the plugin should automatically process and tag posts.">i</span>
+								</th>
+								<td>
+									<input type="checkbox" name="apt_run_apt_publish_post" id="apt_run_apt_publish_post" <?php if($apt_settings['apt_run_apt_publish_post'] == 1) echo 'checked="checked"'; ?>> <label for="apt_run_apt_publish_post">Published or updated</label><br />
+									<input type="checkbox" name="apt_run_apt_wp_insert_post" id="apt_run_apt_wp_insert_post" <?php if($apt_settings['apt_run_apt_wp_insert_post'] == 1) echo 'checked="checked"'; ?>> <label for="apt_run_apt_wp_insert_post">Inserted</label> <span class="apt_help" title="If enabled, APT will process posts created by the function 'wp_insert_post' (other plugins usually use this function to add posts directly to the database).">i</span><br />
+									<input type="checkbox" name="apt_run_apt_save_post" id="apt_run_apt_save_post" <?php if($apt_settings['apt_run_apt_save_post'] == 1) echo 'checked="checked"'; ?> onClick="if(document.getElementById('apt_run_apt_save_post').checked){return confirm('Are you sure? If enabled, the plugin will process posts automatically after every manual AND automatic post save!')}"> <label for="apt_run_apt_save_post">Saved</label> <span class="apt_help" title="If enabled, APT will process posts when they're saved (that includes automatic saves), published or updated.">i</span>
+								</td>
+							</tr>
+							<tr valign="top">
+								<th scope="row">
+									Analyzed post fields: <span class="apt_help" title="APT will look for keywords and their related words in selected areas.">i</span>
 								</th>
 								<td>
 									<input type="checkbox" name="apt_title" id="apt_title" <?php if($apt_settings['apt_title'] == 1) echo 'checked="checked"'; ?>> <label for="apt_title">Title</label><br />
-									<input type="checkbox" name="apt_content" id="apt_content" <?php if($apt_settings['apt_content'] == 1) echo 'checked="checked"'; ?>> <label for="apt_content">Content</label><br />
+									<input type="checkbox" name="apt_content" id="apt_content" <?php if($apt_settings['apt_content'] == 1) echo 'checked="checked"'; ?>> <label for="apt_content">Body content</label><br />
 									<input type="checkbox" name="apt_excerpt" id="apt_excerpt" <?php if($apt_settings['apt_excerpt'] == 1) echo 'checked="checked"'; ?>> <label for="apt_excerpt">Excerpt</label>
 								</td>
 							</tr>
@@ -2226,30 +2334,21 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 							</tr>
 							<tr valign="top">
 								<th scope="row">
+									Old tags handling: <span class="apt_help" title="This option determines what happens if a post already has tags.">i</span>
+								</th>
+								<td>
+									<input type="radio" name="apt_old_tags_handling" id="apt_old_tags_handling_1" value="1" <?php if($apt_settings['apt_old_tags_handling'] == 1) echo 'checked="checked"'; ?>> <label for="apt_old_tags_handling_1">Append new tags to old tags</label><br />
+									<input type="radio" name="apt_old_tags_handling" id="apt_old_tags_handling_2" value="2" <?php if($apt_settings['apt_old_tags_handling'] == 2) echo 'checked="checked"'; ?>> <label for="apt_old_tags_handling_2">Replace old tags with newly generated tags</label><br />
+									<span class="apt_sub_option"><input type="checkbox" name="apt_old_tags_handling_2_remove_old_tags" id="apt_old_tags_handling_2_remove_old_tags" <?php if($apt_settings['apt_old_tags_handling_2_remove_old_tags'] == 1) echo 'checked="checked"'; ?>> <label for="apt_old_tags_handling_2_remove_old_tags">Remove old tags if new ones aren't added</label> <span class="apt_help" title="Already assigned tags will be removed from posts even if the plugin doesn't add new ones (useful for removing old non-relevant tags).">i</span><br />
+									<input type="radio" name="apt_old_tags_handling" id="apt_old_tags_handling_3" value="3" <?php if($apt_settings['apt_old_tags_handling'] == 3) echo 'checked="checked"'; ?>> <label for="apt_old_tags_handling_3">Do nothing</label> <span class="apt_help" title="The tagging function will skip posts which already have tags.">i</span>
+								</td>
+							</tr>
+							<tr valign="top">
+								<th scope="row">
 									<label for="apt_tag_limit">Max # of tags per post:</label> <span class="apt_help" title="APT won't assign more tags than the specified number.">i</span>
 								</th>
 								<td>
 									 <input type="text" name="apt_tag_limit" id="apt_tag_limit" value="<?php echo $apt_settings['apt_tag_limit']; ?>" maxlength="10" size="4"><br />
-								</td>
-							</tr>
-							<tr valign="top">
-								<th scope="row">
-									Action triggering tagging: <span class="apt_help" title="This option determines when the tagging script will be executed. Using the first option is recommended.">i</span>
-								</th>
-								<td>
-									<input type="radio" name="apt_tagging_hook_type" id="apt_tagging_hook_type_1" value="1" <?php if($apt_settings['apt_tagging_hook_type'] == 1) echo 'checked="checked"'; ?>> <label for="apt_tagging_hook_type_1">Publishing/updating</label><br />
-									<input type="radio" name="apt_tagging_hook_type" id="apt_tagging_hook_type_2" value="2" <?php if($apt_settings['apt_tagging_hook_type'] == 2) echo 'checked="checked"'; ?> onClick="return confirm('Are you sure? The tagging script will be executed after every manual AND automatic post save!')"> <label for="apt_tagging_hook_type_2">Saving</label>
-								</td>
-							</tr>
-							<tr valign="top">
-								<th scope="row">
-									Old tags handling: <span class="apt_help" title="This option determines what will happen if a post already has tags.">i</span>
-								</th>
-								<td>
-									<input type="radio" name="apt_handling_current_tags" id="apt_handling_current_tags_1" value="1" <?php if($apt_settings['apt_handling_current_tags'] == 1) echo 'checked="checked"'; ?>> <label for="apt_handling_current_tags_1">Append new tags to old tags</label><br />
-									<input type="radio" name="apt_handling_current_tags" id="apt_handling_current_tags_2" value="2" <?php if($apt_settings['apt_handling_current_tags'] == 2) echo 'checked="checked"'; ?>> <label for="apt_handling_current_tags_2">Replace old tags with newly generated tags</label><br />
-									<span class="apt_margin_left_18"><input type="checkbox" name="apt_handling_current_tags_2_remove_old_tags" id="apt_handling_current_tags_2_remove_old_tags" <?php if($apt_settings['apt_handling_current_tags_2_remove_old_tags'] == 1) echo 'checked="checked"'; ?>> <label for="apt_handling_current_tags_2_remove_old_tags">Remove old tags if new ones aren't added</label> <span class="apt_help" title="Already assigned tags will be removed from posts even if the plugin doesn't add new ones (useful for removing old non-relevant tags).">i</span><br />
-									<input type="radio" name="apt_handling_current_tags" id="apt_handling_current_tags_3" value="3" <?php if($apt_settings['apt_handling_current_tags'] == 3) echo 'checked="checked"'; ?>> <label for="apt_handling_current_tags_3">Do nothing</label>
 								</td>
 							</tr>
 						</table>
@@ -2266,16 +2365,19 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 							</tr>
 							<tr valign="top">
 								<th scope="row">
-									Content processing: <span class="apt_help" title="Various operations which are executed when processing content.">i</span>
+									Content processing: <span class="apt_help" title="Various operations which are executed when analyzed content is being processed (mostly in the order that they are listed below).">i</span>
 								</th>
 								<td>
 									<input type="checkbox" name="apt_wildcards" id="apt_wildcards" <?php if($apt_settings['apt_wildcards'] == 1) echo 'checked="checked"'; ?>> <label for="apt_wildcards">Wildcard support</label> <span class="apt_help" title="If enabled, you can use the wildcard character (&quot;<?php echo htmlspecialchars($apt_settings['apt_wildcard_character']); ?>&quot;) to match any string in related words. Example: the pattern &quot;cat<?php echo htmlspecialchars($apt_settings['apt_wildcard_character']); ?>&quot; will match words &quot;cat&quot;, &quot;cats&quot; and &quot;category&quot;, the pattern &quot;c<?php echo htmlspecialchars($apt_settings['apt_wildcard_character']); ?>t&quot; will match &quot;cat&quot;, &quot;cot&quot; etc. (but also &quot;ct&quot;)">i</span><br />
 									<input type="checkbox" name="apt_substring_analysis" id="apt_substring_analysis" <?php if($apt_settings['apt_substring_analysis'] == 1) echo 'checked="checked"'; ?>> <label for="apt_substring_analysis">Analyze only</label> <input type="text" name="apt_substring_analysis_length" value="<?php echo $apt_settings['apt_substring_analysis_length']; ?>" maxlength="10" size="4"> characters starting at position <input type="text" name="apt_substring_analysis_start" value="<?php echo $apt_settings['apt_substring_analysis_start']; ?>" maxlength="10" size="4"> <span class="apt_help" title="This option is useful if you don't want to analyze all content. It behaves like the PHP function &quot;substr&quot;, you can also enter sub-zero values.">i</span><br />
 									<input type="checkbox" name="apt_ignore_case" id="apt_ignore_case" <?php if($apt_settings['apt_ignore_case'] == 1) echo 'checked="checked"'; ?>> <label for="apt_ignore_case">Ignore case</label> <span class="apt_help" title="Ignore case of keywords, related words and post content. (Note: This option will convert all these strings to lowercase)">i</span><br />
 									<input type="checkbox" name="apt_strip_tags" id="apt_strip_tags" <?php if($apt_settings['apt_strip_tags'] == 1) echo 'checked="checked"'; ?>> <label for="apt_strip_tags">Strip HTML, PHP, JS and CSS tags from analyzed content</label> <span class="apt_help" title="Ignore PHP/HTML/JavaScript/CSS code. (If enabled, only the word &quot;green&quot; will not be ignored in the following example: &lt;span title=&quot;red&quot;&gt;green&lt;/span&gt;)">i</span><br />
+									<input type="checkbox" name="apt_decode_html_entities_word_separators" id="apt_decode_html_entities_word_separators" <?php if($apt_settings['apt_decode_html_entities_word_separators'] == 1) echo 'checked="checked"'; ?>> <label for="apt_decode_html_entities_word_separators">Decode HTML entities in word separators</label> <span class="apt_help" title="Convert HTML entities in word separators to their applicable characters.">i</span><br />
+									<input type="checkbox" name="apt_decode_html_entities_analyzed_content" id="apt_decode_html_entities_analyzed_content" <?php if($apt_settings['apt_decode_html_entities_analyzed_content'] == 1) echo 'checked="checked"'; ?>> <label for="apt_decode_html_entities_analyzed_content">Decode HTML entities in analyzed content</label> <span class="apt_help" title="Convert HTML entities in analyzed content to their applicable characters.">i</span><br />
+									<input type="checkbox" name="apt_decode_html_entities_related_words" id="apt_decode_html_entities_related_words" <?php if($apt_settings['apt_decode_html_entities_related_words'] == 1) echo 'checked="checked"'; ?>> <label for="apt_decode_html_entities_related_words">Decode HTML entities in related words</label> <span class="apt_help" title="Convert HTML entities in related words to their applicable characters.">i</span><br />
 									<input type="checkbox" name="apt_replace_whitespaces" id="apt_replace_whitespaces" <?php if($apt_settings['apt_replace_whitespaces'] == 1) echo 'checked="checked"'; ?>> <label for="apt_replace_whitespaces">Replace whitespace characters with spaces</label> <span class="apt_help" title="If enabled, whitespace characters (spaces, tabs and newlines) will be replaced with spaces. This option will affect both the haystack (analyzed content) and the needle (keywords).">i</span><br />
 									<input type="checkbox" name="apt_replace_nonalphanumeric" id="apt_replace_nonalphanumeric" <?php if($apt_settings['apt_replace_nonalphanumeric'] == 1) echo 'checked="checked"'; ?>> <label for="apt_replace_nonalphanumeric">Replace non-alphanumeric characters with spaces</label> <span class="apt_help" title="If enabled, currently set word separators will be ignored and only a space will be used as a default word separator. This option will affect both the haystack (analyzed content) and the needle (keywords).">i</span><br />
-									<span class="apt_margin_left_18"><input type="checkbox" name="apt_dont_replace_wildcards" id="apt_dont_replace_wildcards" <?php if($apt_settings['apt_dont_replace_wildcards'] == 1) echo 'checked="checked"'; ?>> <label for="apt_dont_replace_wildcards">Don't replace wildcard characters</label> <span class="apt_help" title="This option is required if you want to use wildcards.">i</span>
+									<span class="apt_sub_option"><input type="checkbox" name="apt_dont_replace_wildcards" id="apt_dont_replace_wildcards" <?php if($apt_settings['apt_dont_replace_wildcards'] == 1) echo 'checked="checked"'; ?>> <label for="apt_dont_replace_wildcards">Don't replace wildcard characters</label> <span class="apt_help" title="This option is required if you want to use wildcards.">i</span>
 								</td>
 							</tr>
 							<tr valign="top">
@@ -2288,7 +2390,13 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 							</tr>
 							<tr valign="top">
 								<th scope="row">
-									<label for="apt_taxonomy_name">Taxonomy assigned to posts:</label> <span class="apt_help" title="This taxonomy will be used for adding terms (keywords) to posts. Example: &quot;post_tag&quot; or &quot;category&quot;. Using multiple taxonomies at once is not possible. (If you want to use APT to add categories to posts, see FAQ for more information.)">i</span>
+									<label for="apt_post_statuses">Allowed post statuses:</label> <span class="apt_help" title="Only posts with these statuses (separated by &quot;<?php echo htmlspecialchars($apt_settings['apt_string_separator']); ?>&quot;) will be processed. You can use these statuses: &quot;auto-draft&quot;, &quot;draft&quot;, &quot;future&quot;, &quot;inherit&quot;, &quot;pending&quot;, &quot;private&quot;, &quot;publish&quot;, &quot;trash&quot;.">i</span></td>
+								</th>
+								<td><input type="text" name="apt_post_statuses" id="apt_post_statuses" value="<?php echo htmlspecialchars(implode($apt_settings['apt_string_separator'], $apt_settings['apt_post_statuses'])); ?>" maxlength="5000" size="15"></td></tr>
+							</tr>
+							<tr valign="top">
+								<th scope="row">
+									<label for="apt_taxonomy_name">Affected taxonomy:</label> <span class="apt_help" title="This taxonomy will be used for adding terms (keywords) to posts. Example: &quot;post_tag&quot; or &quot;category&quot;. Using multiple taxonomies at once is not possible. (If you want to use APT to add categories to posts, see FAQ for more information.)">i</span>
 								</th>
 								<td>
 									<input type="text" name="apt_taxonomy_name" id="apt_taxonomy_name" value="<?php echo htmlspecialchars($apt_settings['apt_taxonomy_name']); ?>" maxlength="5000" size="15">
@@ -2308,7 +2416,7 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 							</tr>
 							<tr valign="top">
 								<th scope="row">
-									<label for="apt_string_separator">String separator:</label> <span class="apt_help" title="For separation of related words, ignored post statuses and DB options. Using a comma is recommended. If you change the value, all occurrences of old string separators will be changed.">i</span>
+									<label for="apt_string_separator">String separator:</label> <span class="apt_help" title="For separation of word separators, post types & statuses, related words etc. Using a comma is recommended. If you change the value, all occurrences of old string separators will be changed.">i</span>
 								</th>
 								<td>
 									<input type="text" name="apt_string_separator" id="apt_string_separator" value="<?php echo htmlspecialchars($apt_settings['apt_string_separator']); ?>" maxlength="5000" size="3">
@@ -2316,7 +2424,7 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 							</tr>
 							<tr valign="top">
 								<th scope="row">
-									<label for="apt_wildcard_regex">Wildcard (regex) subpattern:</label> <span class="apt_help" title="This regular expression is used to match strings represented by wildcards. The regex pattern MUST be enclosed by ROUND brackets! Examples: &quot;(.*)&quot; matches any string; &quot;([a-zA-Z0-9]*)&quot; matches alphanumeric strings only.">i</span>
+									<label for="apt_wildcard_regex">Wildcard pattern:</label> <span class="apt_help" title="This regular expression is used to match strings represented by wildcards. The regex pattern MUST be enclosed by ROUND brackets! Examples: &quot;(.*)&quot; matches any string; &quot;([a-zA-Z0-9]*)&quot; matches alphanumeric strings only.">i</span>
 								</th>
 								<td>
 									<input type="text" name="apt_wildcard_regex" id="apt_wildcard_regex" value="<?php echo htmlspecialchars($apt_settings['apt_wildcard_regex']); ?>" maxlength="5000" size="15">
@@ -2327,7 +2435,7 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 									Warning messages: <span class="apt_help" title="Warnings can be hidden if you think that they are annoying.">i</span>
 								</th>
 								<td>
-									<input type="checkbox" name="apt_warning_messages" id="apt_warning_messages" <?php if($apt_settings['apt_warning_messages'] == 1) echo 'checked="checked"'; ?>> <label for="apt_warning_messages">Display warning messages</label>
+									<input type="checkbox" name="apt_warning_messages" id="apt_warning_messages" <?php if($apt_settings['apt_warning_messages'] == 1) echo 'checked="checked"'; ?> onClick="if(!document.getElementById('apt_warning_messages').checked){return confirm('Are you sure? If disabled, the plugin will NOT display various important messages!')}"> <label for="apt_warning_messages">Display warning messages</label>
 								</td>
 							</tr>
 
@@ -2357,11 +2465,11 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 							</tr>
 							<tr valign="top">
 								<th scope="row">
-									Keyword management mode: <span class="apt_help" title="This feature may be needed if the plugin stores a lot keywords in the database and your PHP configuration prevents input fields from being submitted if there's too many of them (current value of the &quot;max_input_vars&quot; variable: <?php echo $apt_max_input_vars_value; ?>). See FAQ for more information.">i</span>
+									Keyword editor mode: <span class="apt_help" title="This feature may be needed if the plugin stores a lot keywords in the database and your PHP configuration prevents input fields from being submitted if there's too many of them (current value of the &quot;max_input_vars&quot; variable: <?php echo $apt_max_input_vars_value; ?>). See FAQ for more information.">i</span>
 								</th>
 								<td>
-									<input type="radio" name="apt_keyword_management_mode" id="apt_keyword_management_mode_1" value="1" <?php if($apt_settings['apt_keyword_management_mode'] == 1) echo 'checked="checked"'; ?>> <label for="apt_keyword_management_mode_1">Multiple input fields for every keyword</label> <span class="apt_help" title="If enabled, all keywords and their related words will be editable via their own input fields.">i</span><br />
-									<input type="radio" name="apt_keyword_management_mode" id="apt_keyword_management_mode_2" value="2" <?php if($apt_settings['apt_keyword_management_mode'] == 2) echo 'checked="checked"'; ?>> <label for="apt_keyword_management_mode_2">Single input field for all keywords <span class="apt_help" title="If enabled, all keywords and their related words will be editable via a single textarea field (keywords have to be submitted in CSV format).">i</span></label>
+									<input type="radio" name="apt_keyword_editor_mode" id="apt_keyword_editor_mode_1" value="1" <?php if($apt_settings['apt_keyword_editor_mode'] == 1) echo 'checked="checked"'; ?>> <label for="apt_keyword_editor_mode_1">Multiple input fields for every keyword</label> <span class="apt_help" title="If enabled, all keywords and their related words will be editable via their own input fields.">i</span><br />
+									<input type="radio" name="apt_keyword_editor_mode" id="apt_keyword_editor_mode_2" value="2" <?php if($apt_settings['apt_keyword_editor_mode'] == 2) echo 'checked="checked"'; ?>> <label for="apt_keyword_editor_mode_2">Single input field for all keywords <span class="apt_help" title="If enabled, all keywords and their related words will be editable via a single textarea field (keywords have to be submitted in CSV format).">i</span></label>
 								</td>
 							</tr>
 						</table>
@@ -2381,14 +2489,14 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 				<!-- postbox -->
 				<form action="<?php echo admin_url('options-general.php?page=automatic-post-tagger'); ?>" method="post">
 				<div class="postbox">
-				<div onclick="apt_toggle_widget(2);" class="handlediv" title="Click to toggle"><br></div>
+				<div onclick="apt_toggle_widget(2);" class="handlediv" title="Click to toggle"><br /></div>
 					<h3 class="hndle"><span>Create new keyword</span></h3>
 					<div class="inside" id="apt_widget_id_[2]" <?php echo apt_change_widget_visibility(2); ?>>
 
 						<table class="apt_width_100_percent">
 						<tr>
-							<td class="apt_width_35_percent">Keyword name: <span class="apt_help" title="Example: &quot;cat&quot;">i</span></td>
-							<td class="apt_width_65_percent">Related words (separated by "<strong><?php echo htmlspecialchars($apt_settings['apt_string_separator']); ?></strong>"): <span class="apt_help" title="<?php echo 'Example: &quot;cats'. $apt_settings['apt_string_separator'] .'kitty'. $apt_settings['apt_string_separator'] .'meo'. $apt_settings['apt_wildcard_character'] .'w&quot;. Related words are optional.'; ?>">i</span></td></tr>
+							<td class="apt_width_35_percent">Keyword name: <span class="apt_help" title="Keyword names represent tags that will be added to posts when they or their Related words are found. Example: &quot;cat&quot;">i</span></td>
+							<td class="apt_width_65_percent">Related words (separated by "<strong><?php echo htmlspecialchars($apt_settings['apt_string_separator']); ?></strong>"): <span class="apt_help" title="<?php echo 'Related words are optional. Example: &quot;cats'. $apt_settings['apt_string_separator'] .'kitty'. $apt_settings['apt_string_separator'] .'meo'. $apt_settings['apt_wildcard_character'] .'w&quot;.'; ?>">i</span></td></tr>
 						<tr>
 							<td><input class="apt_width_100_percent" type="text" name="apt_create_keyword_name" maxlength="5000"></td>
 							<td><input class="apt_width_100_percent" type="text" name="apt_create_keyword_related_words" maxlength="5000"></td>
@@ -2397,7 +2505,7 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 
 						<p>
 							<input class="button" type="submit" name="apt_create_new_keyword_button" value=" Create new keyword ">
-							<span class="apt_right"><small><strong>Hint:</strong> You can also create keywords directly from a widget located next to the post editor.</small></span>		
+							<span class="apt_right"><small><strong>Hint:</strong> You can also create keywords directly from the APT widget displayed next to the post editor.</small></span>		
 						</p>
 					</div>
 				</div>
@@ -2406,19 +2514,29 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 				<!-- //-postbox -->
 
 				<!-- postbox -->
-				<form action="<?php echo admin_url('options-general.php?page=automatic-post-tagger'); ?>" enctype="multipart/form-data" method="post">
+				<form name="apt_import_form" action="<?php echo admin_url('options-general.php?page=automatic-post-tagger'); ?>" enctype="multipart/form-data" method="post">
 				<div class="postbox">
-				<div onclick="apt_toggle_widget(3);" class="handlediv" title="Click to toggle"><br></div>
+				<div onclick="apt_toggle_widget(3);" class="handlediv" title="Click to toggle"><br /></div>
 					<h3 class="hndle"><span>Import/Export keywords</span></h3>
 					<div class="inside" id="apt_widget_id_[3]" <?php echo apt_change_widget_visibility(3); ?>>
 
 						<table class="apt_width_100_percent">
 						<tr>
-							<td class="apt_width_35_percent">Import keywords from the database: <span class="apt_help" title="This tool imports taxonomy items (keywords) from your WordPress database. (The following taxonomy will be used for import: &quot;<?php echo htmlspecialchars($apt_settings['apt_taxonomy_name']); ?>&quot;)">i</span></td>
-							<td class="apt_width_65_percent"><input class="button" type="submit" name="apt_import_from_database_button" value=" Import from DB " onClick="return confirm('Do you really want to import keywords from the specified taxonomy?')"></td>
+							<td class="apt_width_35_percent">Import terms from the database: <span class="apt_help" title="This tool will import terms from the taxonomy &quot;<?php echo htmlspecialchars($apt_settings['apt_taxonomy_name']); ?>&quot;. If you import them as related words, their IDs will be saved as keyword names.">i</span></td>
+							<td class="apt_width_65_percent">Import as
+								
+								<select name="apt_import_from_database_column">
+									<option value="1" selected="selected">Keyword names</option>
+
+									<option value="2">Related words</option>
+								</select>
+
+								<input class="button" type="submit" name="apt_import_from_database_button" value=" Import from DB " onClick="return confirm('Do you really want to import keywords from the taxonomy &quot;<?php echo htmlspecialchars($apt_settings['apt_taxonomy_name']); ?>&quot;?')">
+
+							</td>
 						</tr>
 						<tr>
-							<td>Import keywords from a CSV file: <span class="apt_help" title="This tool imports keywords from a CSV file. The filename must contain the suffix &quot;<?php echo $apt_new_backup_file_name_suffix; ?>&quot;.">i</span></td>
+							<td>Import keywords from a CSV file: <span class="apt_help" title="This tool will imports keywords from a CSV file. The filename must contain the suffix &quot;<?php echo $apt_new_backup_file_name_suffix; ?>&quot;.">i</span></td>
 							<td><input type="file" size="1" name="apt_uploaded_file"> <input class="button" type="submit" name="apt_import_from_file_button" value=" Import from file "></td>
 						</tr>
 						<tr>
@@ -2448,12 +2566,12 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 				<!-- postbox -->
 				<form action="<?php echo admin_url('options-general.php?page=automatic-post-tagger'); ?>" method="post">
 				<div class="postbox">
-				<div onclick="apt_toggle_widget(4);" class="handlediv" title="Click to toggle"><br></div>
-					<h3 class="hndle"><span>Keyword management <small>(<?php echo $apt_settings['apt_keywords_total']; ?> keywords total)</small></span></h3>
+				<div onclick="apt_toggle_widget(4);" class="handlediv" title="Click to toggle"><br /></div>
+					<h3 class="hndle"><span>Keyword editor <span class="apt_font_weight_normal"><small>(<?php echo $apt_settings['apt_keywords_total']; ?> keywords total)</span></small></span></h3>
 					<div class="inside" id="apt_widget_id_[4]" <?php echo apt_change_widget_visibility(4); ?>>
 
 						<?php
-						if($apt_settings['apt_keyword_management_mode'] == 1){
+						if($apt_settings['apt_keyword_editor_mode'] == 1){
 							if($apt_settings['apt_keywords_total'] != 0){
 						?>
 								<div class="apt_manage_keywords">
@@ -2478,17 +2596,17 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 							else{
 								echo '<p>There aren\'t any keywords.</p>';
 							} //-else there are keywords
-						} //-if KMM =1
-						else{ //KMM = 2
+						} //-if KEM =1
+						else{ //KEM = 2
 						?>
 							<p>Keywords have to be submitted in CSV format. <span class="apt_help" title="Put each keyword with its related words on a new line. If you use spaces or commas in your keyword names and related words, you need to enclose these strings in quotes. Example: &quot;keyword name&quot;,&quot;related word,another related word&quot;">i</span></p>
 							<textarea class="apt_manage_keywords_textarea" name="apt_keywords_textarea"><?php echo apt_export_keywords_to_textarea(); ?></textarea>
 						<?php
-						} //-else KMM = 1
+						} //-else KEM = 1
 						?>
 
-						<?php if($apt_settings['apt_keywords_total'] != 0 OR $apt_settings['apt_keyword_management_mode'] == 2){ ?>
-							<?php if($apt_settings['apt_keyword_management_mode'] == 1){ ?>
+						<?php if($apt_settings['apt_keywords_total'] != 0 OR $apt_settings['apt_keyword_editor_mode'] == 2){ ?>
+							<?php if($apt_settings['apt_keyword_editor_mode'] == 1){ ?>
 									<span class="apt_right"><small><strong>Hint:</strong> You can remove individual items by leaving the keyword names empty.</small></span>			
 							<?php }else{ ?>
 									<span class="apt_right"><small><strong>Hint:</strong> You can remove individual items by deleting their lines.</small></span>			
@@ -2497,7 +2615,7 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 							<p class="submit">
 								<input class="button" type="submit" name="apt_save_keywords_button" value=" Save keywords ">
 
-								<?php if($apt_settings['apt_keyword_management_mode'] == 1){ ?>
+								<?php if($apt_settings['apt_keyword_editor_mode'] == 1){ ?>
 									<input class="button apt_red_background apt_right apt_button_margin_left" type="submit" name="apt_delete_chosen_keywords_button" onClick="return confirm('Do you really want to delete chosen keywords?')" value=" Delete chosen keywords ">
 								<?php } ?>
 
@@ -2520,32 +2638,30 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 				<!-- postbox -->
 				<form action="<?php echo admin_url('options-general.php?page=automatic-post-tagger'); ?>" method="post">
 				<div class="postbox">
-					<div onclick="apt_toggle_widget(5);" class="handlediv" title="Click to toggle"><br></div>
+					<div onclick="apt_toggle_widget(5);" class="handlediv" title="Click to toggle"><br /></div>
 					<h3 class="hndle"><span>Bulk tagging tool</span></h3>
 					<div class="inside" id="apt_widget_id_[5]" <?php echo apt_change_widget_visibility(5); ?>>
 
-							<table class="apt_width_100_percent">
-								<tr>
-									<td class="apt_width_35_percent"><label for="apt_bulk_tagging_posts_per_cycle">Number of posts tagged per cycle:</label> <span class="apt_help" title="Low value helps avoid the &quot;max_execution_time&quot; error.">i</span></td>
-									<td class="apt_width_65_percent"><input type="text" name="apt_bulk_tagging_posts_per_cycle" id="apt_bulk_tagging_posts_per_cycle" value="<?php echo $apt_settings['apt_bulk_tagging_posts_per_cycle']; ?>" maxlength="10" size="4"></td></tr>
-								</tr>
-								<tr>
-									<td><label for="apt_bulk_tagging_statuses">Ignore posts with these statuses:</label> <span class="apt_help" title="Posts with specified statuses won't be processed. Separate multiple values with &quot;<?php echo htmlspecialchars($apt_settings['apt_string_separator']); ?>&quot;. You can use these statuses: &quot;auto-draft&quot;, &quot;draft&quot;, &quot;future&quot;, &quot;inherit&quot;, &quot;pending&quot;, &quot;private&quot;, &quot;publish&quot;, &quot;trash&quot;.">i</span></td>
-									<td><input type="text" name="apt_bulk_tagging_statuses" id="apt_bulk_tagging_statuses" value="<?php echo htmlspecialchars(implode($apt_settings['apt_string_separator'], $apt_settings['apt_bulk_tagging_statuses'])); ?>" maxlength="5000" size="45"></td></tr>
-								</tr>
-								<tr>
-									<td>Process only posts in this ID range: <span class="apt_help" title="By default all posts will be processed. Default values are being calculated by using ignored statuses specified above.">i</span></td>
-									<td><input type="text" name="apt_bulk_tagging_range_1" value="<?php if($apt_select_posts_id_min != NULL){echo $apt_select_posts_id_min;}else{echo '0';}; ?>" maxlength="10" size="4"> - <input type="text" name="apt_bulk_tagging_range_2" value="<?php if($apt_select_posts_id_max != NULL){echo $apt_select_posts_id_max;}else{echo '0';}; ?>" maxlength="10" size="4"></td></tr>
-								</tr>
-							</table>
+						<table class="apt_width_100_percent">
+							<tr>
+								<td>Process only posts in this ID range: <span class="apt_help" title="By default all posts will be processed. Default values are being calculated by using set post types and statuses.">i</span></td>
+								<td><input type="text" name="apt_bulk_tagging_range_1" value="<?php if($apt_select_posts_id_min != NULL){echo $apt_select_posts_id_min;}else{echo '0';}; ?>" maxlength="10" size="4"> - <input type="text" name="apt_bulk_tagging_range_2" value="<?php if($apt_select_posts_id_max != NULL){echo $apt_select_posts_id_max;}else{echo '0';}; ?>" maxlength="10" size="4"></td></tr>
+							</tr>
+							<tr>
+								<td class="apt_width_35_percent"><label for="apt_bulk_tagging_posts_per_cycle">Number of posts tagged per cycle:</label> <span class="apt_help" title="How many posts should be processed every time a page is refreshed; low value helps avoid the &quot;max_execution_time&quot; error.">i</span></td>
+								<td class="apt_width_65_percent"><input type="text" name="apt_bulk_tagging_posts_per_cycle" id="apt_bulk_tagging_posts_per_cycle" value="<?php echo $apt_settings['apt_bulk_tagging_posts_per_cycle']; ?>" maxlength="10" size="4"></td></tr>
+							</tr>
+							<tr>
+								<td><label for="apt_bulk_tagging_delay">Time delay between cycles:</label> <span class="apt_help" title="Idle time between an automatic refresh of the page and processing of the next batch of posts.">i</span></td>
+								<td><input type="text" name="apt_bulk_tagging_delay" value="<?php echo $apt_settings['apt_bulk_tagging_delay']; ?>" maxlength="10" size="4"> seconds</td></tr>
+							</tr>
+						</table>
 
-							<p class="submit">
-								<input class="button" type="submit" name="apt_bulk_tagging_button" onClick="return confirm('Do you really want to proceed?\nAny changes can\'t be reversed.')" value=" Assign tags "> 
-							</p>
-						</div>
-
+						<p class="submit">
+							<input class="button" type="submit" name="apt_bulk_tagging_button" onClick="return confirm('Do you really want to proceed?\nAny changes can\'t be reversed.')" value=" Process posts "> 
+						</p>
 					</div>
-
+				</div>
 				<?php wp_nonce_field('apt_bulk_tagging_nonce','apt_bulk_tagging_hash'); ?>
 				</form>
 				<!-- //-postbox -->
@@ -2553,10 +2669,8 @@ if(isset($_POST['apt_bulk_tagging_button'])){
 			</div>
 		</div>
 	</div>
-
-</div>
 </div>
 
 <?php
-} //-function options page
+} //- options page
 ?>
