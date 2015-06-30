@@ -3217,6 +3217,9 @@ function apt_single_post_tagging($apt_post_id, $apt_mistake_checks = 1, $apt_ret
 
 	### ADDING TERMS TO THE POST according to the taxonomies they belong to
 	foreach($apt_taxonomies_with_found_terms_array as $apt_single_taxonomy_with_found_terms_array){
+		$apt_current_taxonomy_terms = wp_get_post_terms($apt_post_id, $apt_single_taxonomy_with_found_terms_array[0], array('fields' => 'names'));
+		$apt_current_taxonomy_term_count = count($apt_current_taxonomy_terms);
+
 		if($apt_number_of_added_terms_total > 0 and ($apt_settings['apt_old_terms_handling'] == 1 or $apt_settings['apt_old_terms_handling'] == 3)){ //if terms were found by the plugin; if the post has no terms, we should add them - if it already has some, it won't pass one of the first conditions in the function if $apt_settings['apt_old_terms_handling'] == 3
 			wp_set_object_terms($apt_post_id, $apt_single_taxonomy_with_found_terms_array[1], $apt_single_taxonomy_with_found_terms_array[0], true); //append terms
 		}
@@ -3225,7 +3228,7 @@ function apt_single_post_tagging($apt_post_id, $apt_mistake_checks = 1, $apt_ret
 				wp_set_object_terms($apt_post_id, $apt_single_taxonomy_with_found_terms_array[1], $apt_single_taxonomy_with_found_terms_array[0], false); //replace terms
 			}
 			else{ //no new terms/keywords were found
-				if(($apt_settings['apt_old_terms_handling_2_remove_old_terms'] == 1) and ($apt_post_current_term_count > 0)){ //if no new terms were found and there are old terms, remove them all
+				if(($apt_settings['apt_old_terms_handling_2_remove_old_terms'] == 1) and ($apt_current_taxonomy_term_count > 0)){ //if no new terms were found and there are old terms, remove them all
 					wp_delete_object_term_relationships($apt_post_id, $apt_single_taxonomy_with_found_terms_array[0]); //remove all terms
 				}
 			} //-else
@@ -4500,6 +4503,7 @@ if(isset($_POST['apt_import_plugin_settings_from_file_button'])){ //import plugi
 	else{ //the nonce is invalid
 		die($apt_invalid_nonce_message);
 	}
+
 }
 
 if(isset($_POST['apt_import_keyword_sets_from_file_button'])){ //import keyword sets
